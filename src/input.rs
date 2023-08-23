@@ -39,23 +39,23 @@ pub struct Processed {
 }
 
 
-type Preprocessor    = Box<dyn FnMut(Vec<String>, usize) -> Processed>;
-type Renderer        = Box<dyn FnMut(Vec<String>, usize) -> (String, usize)>;
-type Finalizer<T>    = Box<dyn FnMut(String) -> T>;
-type FallbackHandler = Box<dyn FnMut(Event) -> Result<(), ()>>;
+type Preprocessor<'a>    = Box<dyn FnMut(Vec<String>, usize) -> Processed + 'a>;
+type Renderer<'a>        = Box<dyn FnMut(Vec<String>, usize) -> (String, usize) + 'a>;
+type Finalizer<'a, T>    = Box<dyn FnMut(String) -> T + 'a>;
+type FallbackHandler<'a> = Box<dyn FnMut(Event) -> Result<(), ()> + 'a>;
 
 
-pub struct InputBuilder<T> {
+pub struct InputBuilder<'a, T> {
   prompt: String,
 
-  preprocessor    : Option<Preprocessor>,
-  renderer        : Option<Renderer    >,
-  finalizer       : Option<Finalizer<T>>,
-  fallback_handler: Option<FallbackHandler>,
+  preprocessor    : Option<Preprocessor   <'a>>,
+  renderer        : Option<Renderer       <'a>>,
+  finalizer       : Option<Finalizer      <'a, T>>,
+  fallback_handler: Option<FallbackHandler<'a>>,
 }
 
 
-impl<T> InputBuilder<T> {
+impl<'a, T> InputBuilder<'a, T> {
   pub fn new(prompt: impl AsRef<str>) -> Self {
     Self {
       prompt: prompt.as_ref().to_string(),
@@ -67,22 +67,22 @@ impl<T> InputBuilder<T> {
     }
   }
 
-  pub fn preprocessor(mut self, f: impl FnMut(Vec<String>, usize) -> Processed + 'static) -> Self {
+  pub fn preprocessor(mut self, f: impl FnMut(Vec<String>, usize) -> Processed + 'a) -> Self {
     self.preprocessor = Some(Box::new(f));
     self
   }
 
-  pub fn renderer(mut self, f: impl FnMut(Vec<String>, usize) -> (String, usize) + 'static) -> Self {
+  pub fn renderer(mut self, f: impl FnMut(Vec<String>, usize) -> (String, usize) + 'a) -> Self {
     self.renderer = Some(Box::new(f));
     self
   }
 
-  pub fn fallback_handler(mut self, f: impl FnMut(Event) -> Result<(), ()> + 'static) -> Self {
+  pub fn fallback_handler(mut self, f: impl FnMut(Event) -> Result<(), ()> + 'a) -> Self {
     self.fallback_handler = Some(Box::new(f));
     self
   }
 
-  pub fn build_with_final(self, f: impl FnMut(String) -> T + 'static) -> Input<T> {
+  pub fn build_with_final(self, f: impl FnMut(String) -> T + 'a) -> Input<'a, T> {
     Input {
       prompt: self.prompt,
 
@@ -98,27 +98,27 @@ impl<T> InputBuilder<T> {
 }
 
 
-impl InputBuilder<String> {
-  pub fn build(self) -> Input<String> {
+impl<'a> InputBuilder<'a, String> {
+  pub fn build(self) -> Input<'a, String> {
     self.build_with_final(|s| s)
   }
 }
 
 
-pub struct Input<T> {
+pub struct Input<'a, T> {
   prompt: String,
 
-  preprocessor    : Preprocessor,
-  renderer        : Renderer,
-  finalizer       : Finalizer<T>,
-  fallback_handler: FallbackHandler,
+  preprocessor    : Preprocessor<'a>,
+  renderer        : Renderer<'a>,
+  finalizer       : Finalizer<'a, T>,
+  fallback_handler: FallbackHandler<'a>,
 
   history      : Vec<Vec<String>>,
   history_index: usize,
 }
 
 
-impl<T> Input<T> {
+impl<'a, T> Input<'a, T> {
   pub fn prompt(&mut self) -> Result<T, ()> {
     let enabled = is_raw_mode_enabled().unwrap();
     if !enabled { enable_raw_mode().unwrap(); }
