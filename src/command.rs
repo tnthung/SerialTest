@@ -14,9 +14,10 @@ pub enum CommandType {
 
   SetPort,        // set port
   SetBaud,        // set baud rate
-  SetParity,      // set parity
   SetDataBits,    // set data bits
+  SetParity,      // set parity
   SetStopBits,    // set stop bits
+  SetTimeout,     // set timeout
 
   SetRts,         // set RTS
   SetDtr,         // set DTR
@@ -40,9 +41,10 @@ impl std::str::FromStr for CommandType {
       "set-mode" => Ok(CommandType::SetMode    ),
       "set-port" => Ok(CommandType::SetPort    ),
       "set-baud" => Ok(CommandType::SetBaud    ),
-      "set-par"  => Ok(CommandType::SetParity  ),
       "set-data" => Ok(CommandType::SetDataBits),
+      "set-par"  => Ok(CommandType::SetParity  ),
       "set-stop" => Ok(CommandType::SetStopBits),
+      "set-time" => Ok(CommandType::SetTimeout ),
       "set-rts"  => Ok(CommandType::SetRts     ),
       "set-dtr"  => Ok(CommandType::SetDtr     ),
       "get-cts"  => Ok(CommandType::GetCts     ),
@@ -66,9 +68,10 @@ impl std::fmt::Display for CommandType {
       CommandType::SetMode     => write!(f, "SetMode"    ),
       CommandType::SetPort     => write!(f, "SetPort"    ),
       CommandType::SetBaud     => write!(f, "SetBaud"    ),
-      CommandType::SetParity   => write!(f, "SetParity"  ),
       CommandType::SetDataBits => write!(f, "SetDataBits"),
+      CommandType::SetParity   => write!(f, "SetParity"  ),
       CommandType::SetStopBits => write!(f, "SetStopBits"),
+      CommandType::SetTimeout  => write!(f, "SetTimeout" ),
       CommandType::SetRts      => write!(f, "SetRts"     ),
       CommandType::SetDtr      => write!(f, "SetDtr"     ),
       CommandType::GetCts      => write!(f, "GetCts"     ),
