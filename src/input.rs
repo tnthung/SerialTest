@@ -9,11 +9,17 @@ use crossterm::{
   queue,
   execute,
 
+  cursor::{
+    position,
+    MoveToColumn,
+  },
+
   event::{
     Event,
     KeyCode,
     KeyEvent,
-    KeyModifiers, KeyEventKind,
+    KeyModifiers,
+    KeyEventKind,
   },
 
   style::{
@@ -24,12 +30,13 @@ use crossterm::{
   },
 
   terminal::{
+    size,
     Clear,
     ClearType,
     enable_raw_mode,
     disable_raw_mode,
     is_raw_mode_enabled,
-  }, cursor::MoveToColumn,
+  },
 };
 
 
@@ -387,13 +394,39 @@ impl<'a, T> Input<'a, T> {
         Print(&msg),
       ).unwrap();
 
+      // Print the candidate
       if candidate.len() > 0 {
+        let mut candidate = candidate.join(", ");
+        let w = size    ().unwrap().0;
+        let x = position().unwrap().0;
+
+        let rest = (w-x - 5) as usize;
+        let show = candidate.len();
+
+        // If rest is not sufficient to show all candidates
+        if rest < show {
+          // If rest is not sufficient to show any candidate
+          if rest < 3 {
+            candidate = String::new();
+          }
+
+          // If rest can show parts of the candidates
+          else {
+            candidate = candidate[..rest-1].to_string();
+            candidate.push_str("..");
+          }
+        }
+
+        // Add brackets
+        if candidate.len() > 0 {
+          candidate = format!("[{}]", candidate);
+        }
+
         queue!(
           &stdout,
           SetForegroundColor(Color::DarkGrey),
-          Print(" ["),
-          Print(&candidate.join(", ")),
-          Print("]"),
+          Print(" "),
+          Print(candidate),
         ).unwrap();
       }
 
