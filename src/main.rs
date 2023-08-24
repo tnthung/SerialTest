@@ -465,8 +465,6 @@ fn main() {
 
   let mut input = input::InputBuilder::new("> ")
     .preprocessor(|s, _| {
-      (*ctrl_c.borrow_mut()) = false;
-
       let (command, buffer) = split_cmd_and_buf(s.clone());
 
       let buffer_str  = buffer .concat();
@@ -752,6 +750,8 @@ fn main() {
 
       continue;
     }
+
+    (*ctrl_c.borrow_mut()) = false;
 
     let (command, argument) = prompt_result.unwrap();
 
