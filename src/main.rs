@@ -434,11 +434,10 @@ fn main() {
     }
 
     match serialport::new(&port_name, baud_rate)
-      .flow_control(FlowControl::Hardware)
-      .data_bits   (data_bits)
-      .parity      (parity   )
-      .stop_bits   (stop_bits)
-      .timeout     (std::time::Duration::from_millis(100))
+      .data_bits(data_bits)
+      .parity   (parity   )
+      .stop_bits(stop_bits)
+      .timeout  (std::time::Duration::from_millis(100))
       .open()
     {
       Ok(port) => port,
