@@ -37,7 +37,7 @@ impl std::str::FromStr for CommandType {
       "clear"    => Ok(CommandType::Clear      ),
       "flush"    => Ok(CommandType::Flush      ),
       "send"     => Ok(CommandType::Send       ),
-      "receive"  => Ok(CommandType::Receive    ),
+      "recv"     => Ok(CommandType::Receive    ),
       "set-mode" => Ok(CommandType::SetMode    ),
       "set-port" => Ok(CommandType::SetPort    ),
       "set-baud" => Ok(CommandType::SetBaud    ),
