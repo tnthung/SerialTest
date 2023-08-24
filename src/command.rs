@@ -19,6 +19,7 @@ pub enum CommandType {
   SetParity,      // set parity
   SetStopBits,    // set stop bits
   SetTimeout,     // set timeout
+  SetFlow,        // set flow control
 
   SetRts,         // set RTS
   SetDtr,         // set DTR
@@ -32,6 +33,7 @@ pub enum CommandType {
   GetParity,      // get parity
   GetStopBits,    // get stop bits
   GetTimeout,     // get timeout
+  GetFlow,        // get flow control
 
   GetInQue,       // get input queue
   GetOutQue,      // get output queue
@@ -60,6 +62,7 @@ impl std::str::FromStr for CommandType {
       "set-par"    => Ok(CommandType::SetParity  ),
       "set-stop"   => Ok(CommandType::SetStopBits),
       "set-time"   => Ok(CommandType::SetTimeout ),
+      "set-flow"   => Ok(CommandType::SetFlow    ),
       "set-rts"    => Ok(CommandType::SetRts     ),
       "set-dtr"    => Ok(CommandType::SetDtr     ),
       "get-mode"   => Ok(CommandType::GetMode    ),
@@ -70,6 +73,7 @@ impl std::str::FromStr for CommandType {
       "get-par"    => Ok(CommandType::GetParity  ),
       "get-stop"   => Ok(CommandType::GetStopBits),
       "get-time"   => Ok(CommandType::GetTimeout ),
+      "get-flow"   => Ok(CommandType::GetFlow    ),
       "get-in"     => Ok(CommandType::GetInQue   ),
       "get-out"    => Ok(CommandType::GetOutQue  ),
       "get-cts"    => Ok(CommandType::GetCts     ),
@@ -98,6 +102,7 @@ impl std::fmt::Display for CommandType {
       CommandType::SetParity   => write!(f, "SetParity"  ),
       CommandType::SetStopBits => write!(f, "SetStopBits"),
       CommandType::SetTimeout  => write!(f, "SetTimeout" ),
+      CommandType::SetFlow     => write!(f, "SetFlow"    ),
       CommandType::SetRts      => write!(f, "SetRts"     ),
       CommandType::SetDtr      => write!(f, "SetDtr"     ),
       CommandType::GetMode     => write!(f, "GetMode"    ),
@@ -108,6 +113,7 @@ impl std::fmt::Display for CommandType {
       CommandType::GetParity   => write!(f, "GetParity"  ),
       CommandType::GetStopBits => write!(f, "GetStopBits"),
       CommandType::GetTimeout  => write!(f, "GetTimeout" ),
+      CommandType::GetFlow     => write!(f, "GetFlow"    ),
       CommandType::GetInQue    => write!(f, "GetInQue"   ),
       CommandType::GetOutQue   => write!(f, "GetOutQue"  ),
       CommandType::GetCts      => write!(f, "GetCts"     ),

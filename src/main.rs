@@ -49,7 +49,6 @@ use crossterm::{
 
 /* TODO
 
-  2.   Flow control
   4.   Copy & paste
   4-1. Select
   6.   Delete by word       // not possible currently due to crossterm
@@ -80,6 +79,7 @@ const HELP_MESSAGE: &str = "Help:
     set-par  <parity>: set parity           parity: none, odd, even
     set-stop <sbits> : set stop bits        sbits : 1, 2
     set-time <time>  : set timeout          time  : milliseconds
+    set-flow <flow>  : set flow control     flow  : none, software, hardware
 
     set-rts  <state> : set RTS state        state : on, off
     set-dtr  <state> : set DTR state        state : on, off
@@ -93,6 +93,7 @@ const HELP_MESSAGE: &str = "Help:
     get-par          : quarry parity
     get-stop         : quarry stop bits
     get-time         : quarry timeout
+    get-flow         : quarry flow control
 
     get-in           : quarry input  buffer
     get-out          : quarry output buffer
@@ -566,12 +567,21 @@ fn main() {
             candidate.push("2".to_string());
           },
 
-          "set-rts" => {
-            candidate.push("on" .to_string());
-            candidate.push("off".to_string());
+          "set-time" => {
+            candidate.push("100" .to_string());
+            candidate.push("500" .to_string());
+            candidate.push("1000".to_string());
+            candidate.push("2000".to_string());
           },
 
-          "set-dtr" => {
+          "set-flow" => {
+            candidate.push("none"    .to_string());
+            candidate.push("software".to_string());
+            candidate.push("hardware".to_string());
+          },
+
+          | "set-rts"
+          | "set-dtr" => {
             candidate.push("on" .to_string());
             candidate.push("off".to_string());
           },
@@ -591,6 +601,7 @@ fn main() {
               candidate.push("set-data"  .to_string());
               candidate.push("set-stop"  .to_string());
               candidate.push("set-time"  .to_string());
+              candidate.push("set-flow"  .to_string());
               candidate.push("set-rts"   .to_string());
               candidate.push("set-dtr"   .to_string());
               candidate.push("get-mode"  .to_string());
@@ -601,6 +612,7 @@ fn main() {
               candidate.push("get-par"   .to_string());
               candidate.push("get-stop"  .to_string());
               candidate.push("get-time"  .to_string());
+              candidate.push("get-flow"  .to_string());
               candidate.push("get-in"    .to_string());
               candidate.push("get-out"   .to_string());
               candidate.push("get-cts"   .to_string());
@@ -664,6 +676,7 @@ fn main() {
         | "set-par"
         | "set-stop"
         | "set-time"
+        | "set-flow"
         | "set-rts"
         | "set-dtr"
         | "get-mode"
@@ -674,6 +687,7 @@ fn main() {
         | "get-par"
         | "get-stop"
         | "get-time"
+        | "get-flow"
         | "get-in"
         | "get-out"
         | "get-cts"
@@ -714,12 +728,14 @@ fn main() {
 
       // buffer
       match command_str.as_str() {
+        // Argument must match
         | "set-mode"
         | "set-ending"
         | "set-port"
         | "set-par"
         | "set-data"
         | "set-stop"
+        | "set-flow"
         | "set-rts"
         | "set-dtr" => {
           processed.push_str(&SetForegroundColor(
@@ -732,6 +748,7 @@ fn main() {
           column += calc_col(buffer_str.len());
         },
 
+        // Argument can match
         | "set-baud"
         | "set-time" => {
           processed.push_str(&SetForegroundColor(
@@ -743,6 +760,7 @@ fn main() {
           column += calc_col(buffer_str.len());
         },
 
+        // Argument in special format
         "send" => {
           match *mode.borrow() {
             Mode::ASCII => {
@@ -774,6 +792,7 @@ fn main() {
           }
         },
 
+        // No argument
         _ => {
           processed.push_str(&SetForegroundColor(Color::Red).to_string());
           processed.push_str(&buffer_str);
@@ -1391,6 +1410,48 @@ fn main() {
           },
         },
 
+      (CommandType::SetFlow, arg) =>
+        match {
+          match arg.to_lowercase().as_str() {
+            "none"     => port.set_flow_control(serialport::FlowControl::None    ),
+            "software" => port.set_flow_control(serialport::FlowControl::Software),
+            "hardware" => port.set_flow_control(serialport::FlowControl::Hardware),
+
+            _ => Err(serialport::Error::new(
+              serialport::ErrorKind::InvalidInput,
+              "Invalid flow control.",
+            )),
+          }
+        } {
+          Ok(_) => {
+            queue!(
+              stdout,
+              Print("Flow control: "),
+              SetForegroundColor(Color::Green),
+              Print(arg),
+              ResetColor,
+            ).unwrap();
+          },
+
+          Err(serialport::Error { kind: serialport::ErrorKind::InvalidInput, .. }) => {
+            queue!(
+              stdout,
+              SetForegroundColor(Color::Red),
+              Print("Invalid flow control."),
+              ResetColor,
+            ).unwrap();
+          },
+
+          Err(_) => {
+            queue!(
+              stdout,
+              SetForegroundColor(Color::Red),
+              Print("Failed to set flow control."),
+              ResetColor,
+            ).unwrap();
+          },
+        },
+
       (CommandType::SetRts, arg) =>
         match {
           match arg.to_lowercase().as_str() {
@@ -1549,6 +1610,16 @@ fn main() {
           Print("Timeout: "),
           SetForegroundColor(Color::Green),
           Print(format!("{} ms", port.timeout().as_millis())),
+          ResetColor,
+        ).unwrap();
+      },
+
+      (CommandType::GetFlow, "") => {
+        queue!(
+          stdout,
+          Print("Flow control: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{:?}", port.flow_control().unwrap())),
           ResetColor,
         ).unwrap();
       },
