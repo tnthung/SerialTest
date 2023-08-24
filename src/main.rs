@@ -128,7 +128,8 @@ fn main() {
           let mut candidate = ports.iter()
             .map(|p| {
               let len = name.len();
-              if p.port_name.len() < len {
+              if p.port_name.len() < len ||
+                !p.port_name.starts_with(&name) {
                 return String::new(); }
               p.port_name[len..].to_string()
             })
