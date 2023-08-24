@@ -57,6 +57,9 @@ use crossterm::{
   4.   Copy & paste
   4-1. Select
   6.   Delete by word       // not possible currently due to crossterm
+  7.   Calculate checksum
+  8.   Reverse send
+  9.   Switch port message has wrong padding
 */
 
 
@@ -76,6 +79,7 @@ const HELP_MESSAGE: &str = "Help:
 
     set-mode   <mode>: set mode             mode  : ascii, hex
     set-ending <end> : set auto ending      end   : none, cr, lf, crlf
+    set-rev    <rev> : set reverse send     rev   : on, off
 
     set-port <name>  : set port             name  : string
     set-baud <rate>  : set baud rate        rate  : 9600, 19200, 38400, 57600,
@@ -91,6 +95,7 @@ const HELP_MESSAGE: &str = "Help:
 
     get-mode         : quarry mode
     get-ending       : quarry auto ending
+    get-rev          : quarry reverse send
 
     get-port         : quarry port name
     get-baud         : quarry baud rate
@@ -510,6 +515,7 @@ fn main() {
   let mode            = RefCell::new(Mode::ASCII);
   let ctrl_c          = RefCell::new(false);
   let ending          = RefCell::new(Ending::None);
+  let reverse         = RefCell::new(false);
   let has_candidate   = RefCell::new(false);
   let match_candidate = RefCell::new(false);
 
@@ -606,6 +612,7 @@ fn main() {
             candidate.push("hardware".to_string());
           },
 
+          | "set-rev"
           | "set-rts"
           | "set-dtr" => {
             candidate.push("on" .to_string());
@@ -621,6 +628,7 @@ fn main() {
               candidate.push("flush"     .to_string());
               candidate.push("set-mode"  .to_string());
               candidate.push("set-ending".to_string());
+              candidate.push("set-rev"   .to_string());
               candidate.push("set-port"  .to_string());
               candidate.push("set-baud"  .to_string());
               candidate.push("set-par"   .to_string());
@@ -632,6 +640,7 @@ fn main() {
               candidate.push("set-dtr"   .to_string());
               candidate.push("get-mode"  .to_string());
               candidate.push("get-ending".to_string());
+              candidate.push("get-rev"   .to_string());
               candidate.push("get-port"  .to_string());
               candidate.push("get-baud"  .to_string());
               candidate.push("get-data"  .to_string());
@@ -696,6 +705,7 @@ fn main() {
         | "flush"
         | "set-mode"
         | "set-ending"
+        | "set-rev"
         | "set-port"
         | "set-baud"
         | "set-data"
@@ -707,6 +717,7 @@ fn main() {
         | "set-dtr"
         | "get-mode"
         | "get-ending"
+        | "get-rev"
         | "get-port"
         | "get-baud"
         | "get-data"
@@ -757,6 +768,7 @@ fn main() {
         // Argument must match
         | "set-mode"
         | "set-ending"
+        | "set-rev"
         | "set-port"
         | "set-par"
         | "set-data"
@@ -861,9 +873,14 @@ fn main() {
 
         let mut tmp = String::new();
 
+        let mut buffer = buffer[..count].to_vec();
+        if *(reverse.borrow()) {
+          buffer.reverse();
+        }
+
         match *mode.borrow() {
           Mode::ASCII => {
-            for i in buffer[..count].to_vec() {
+            for i in buffer {
               tmp.push_str(get_printable_ascii(
                 if i.is_ascii_graphic() { (i as char).to_string() }
                 else                    { format!("\\{:02X}", i)  },
@@ -872,7 +889,7 @@ fn main() {
           },
 
           Mode::HEX => {
-            for i in buffer[..count].to_vec() {
+            for i in buffer {
               tmp.push_str(format!("{:02X}", i).as_str());
             }
           },
@@ -1044,10 +1061,18 @@ fn main() {
           }
 
           // send message
-          match port.write(&buffer) {
+          match port.write({
+            if *reverse.borrow() {
+              buffer.reverse(); }
+            &buffer
+          }) {
             Ok(_) => {
               queue!(
                 stdout,
+                Print(
+                  if *reverse.borrow() { "[Reverse]\n" }
+                  else                 { ""            }
+                ),
                 Print("Sent "),
                 SetForegroundColor(Color::Green),
                 Print(format!("{:4}", buffer.len())),
@@ -1067,14 +1092,14 @@ fn main() {
             },
           }
 
-        execute!(
-          stdout,
+          execute!(
+            stdout,
             Print("\n"),
-        ).unwrap();
+          ).unwrap();
 
           read_serial(port.try_clone().unwrap());
-                }
-              },
+        }
+      },
 
       (CommandType::Receive, "") =>
         (read_serial)(port.try_clone().unwrap()),
@@ -1193,6 +1218,42 @@ fn main() {
             ).unwrap();
           },
         },
+
+      (CommandType::SetReverse, arg) =>
+        match arg.to_lowercase().as_str() {
+          "on" => {
+            *(reverse.borrow_mut()) = true;
+
+            queue!(
+              stdout,
+              Print("Reverse: "),
+              SetForegroundColor(Color::Green),
+              Print("On"),
+              ResetColor,
+            ).unwrap();
+          }
+
+          "off" => {
+            *(reverse.borrow_mut()) = false;
+
+            queue!(
+              stdout,
+              Print("Reverse: "),
+              SetForegroundColor(Color::Green),
+              Print("Off"),
+              ResetColor,
+            ).unwrap();
+          }
+
+          _ => {
+            queue!(
+              stdout,
+              SetForegroundColor(Color::Red),
+              Print("Invalid reverse."),
+              ResetColor,
+            ).unwrap();
+          },
+        }
 
       (CommandType::SetPort, _) =>
         if let Some(_) = available_ports()
@@ -1591,6 +1652,19 @@ fn main() {
           Print("Ending: "),
           SetForegroundColor(Color::Green),
           Print(format!("{:?}", ending.borrow())),
+          ResetColor,
+        ).unwrap();
+      },
+
+      (CommandType::GetReverse, "") => {
+        queue!(
+          stdout,
+          Print("Reverse: "),
+          SetForegroundColor(Color::Green),
+          Print(
+            if *reverse.borrow() { "On"  }
+            else                 { "Off" }
+          ),
           ResetColor,
         ).unwrap();
       },

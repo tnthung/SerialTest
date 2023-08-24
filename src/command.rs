@@ -12,6 +12,7 @@ pub enum CommandType {
 
   SetMode,        // set mode
   SetEnding,      // set ending
+  SetReverse,     // set reverse
 
   SetPort,        // set port
   SetBaud,        // set baud rate
@@ -26,6 +27,7 @@ pub enum CommandType {
 
   GetMode,        // get mode
   GetEnding,      // get ending
+  GetReverse,     // get reverse
 
   GetPort,        // get port
   GetBaud,        // get baud rate
@@ -56,6 +58,7 @@ impl std::str::FromStr for CommandType {
       "recv"       => Ok(CommandType::Receive    ),
       "set-mode"   => Ok(CommandType::SetMode    ),
       "set-ending" => Ok(CommandType::SetEnding  ),
+      "set-rev"    => Ok(CommandType::SetReverse ),
       "set-port"   => Ok(CommandType::SetPort    ),
       "set-baud"   => Ok(CommandType::SetBaud    ),
       "set-data"   => Ok(CommandType::SetDataBits),
@@ -66,7 +69,8 @@ impl std::str::FromStr for CommandType {
       "set-rts"    => Ok(CommandType::SetRts     ),
       "set-dtr"    => Ok(CommandType::SetDtr     ),
       "get-mode"   => Ok(CommandType::GetMode    ),
-      "get-ending" => Ok(CommandType::GetEnding),
+      "get-ending" => Ok(CommandType::GetEnding  ),
+      "get-rev"    => Ok(CommandType::GetReverse ),
       "get-port"   => Ok(CommandType::GetPort    ),
       "get-baud"   => Ok(CommandType::GetBaud    ),
       "get-data"   => Ok(CommandType::GetDataBits),
@@ -96,6 +100,7 @@ impl std::fmt::Display for CommandType {
       CommandType::Receive     => write!(f, "Receive"    ),
       CommandType::SetMode     => write!(f, "SetMode"    ),
       CommandType::SetEnding   => write!(f, "SetEnding"  ),
+      CommandType::SetReverse  => write!(f, "SetReverse" ),
       CommandType::SetPort     => write!(f, "SetPort"    ),
       CommandType::SetBaud     => write!(f, "SetBaud"    ),
       CommandType::SetDataBits => write!(f, "SetDataBits"),
@@ -107,6 +112,7 @@ impl std::fmt::Display for CommandType {
       CommandType::SetDtr      => write!(f, "SetDtr"     ),
       CommandType::GetMode     => write!(f, "GetMode"    ),
       CommandType::GetEnding   => write!(f, "GetEnding"  ),
+      CommandType::GetReverse  => write!(f, "GetReverse" ),
       CommandType::GetPort     => write!(f, "GetPort"    ),
       CommandType::GetBaud     => write!(f, "GetBaud"    ),
       CommandType::GetDataBits => write!(f, "GetDataBits"),
