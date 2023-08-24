@@ -23,26 +23,16 @@ use crossterm::{
   queue,
   execute,
 
-  event::{
-    read,
-    Event,
-    MouseEvent,
-    MouseEventKind,
-    EnableMouseCapture,
-  },
-
   cursor::{
     MoveTo,
-    MoveLeft,
-    MoveDown,
-    SavePosition, RestorePosition, MoveUp, MoveToColumn,
+    MoveUp,
   },
 
   style::{
     Color,
     Print,
     ResetColor,
-    SetForegroundColor, SetBackgroundColor,
+    SetForegroundColor,
   },
 
   terminal::{
