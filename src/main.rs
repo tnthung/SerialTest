@@ -899,7 +899,7 @@ fn main() {
       },
 
       (CommandType::Receive, "") => {
-        let mut buffer = Vec::<u8>::new();
+        let mut buffer = [0u8; 1024];
 
         match port.read(&mut buffer) {
           Ok(count) => {
