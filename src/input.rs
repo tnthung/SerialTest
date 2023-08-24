@@ -2,7 +2,7 @@ use crate::util::block;
 
 use crate::event::{
   Flow,
-  start_listener_sync,
+  start_listener,
 };
 
 use crossterm::{
@@ -144,7 +144,7 @@ impl<'a, T> Input<'a, T> {
       Print(&self.prompt)
     ).unwrap();
 
-    start_listener_sync(|event| {
+    start_listener(|event| {
       match event {
         // Any key event that is not a press is omitted
         Event::Key(KeyEvent { kind, .. })
