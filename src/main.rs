@@ -130,7 +130,7 @@ fn main() {
               let len = name.len();
               if p.port_name.len() < len {
                 return String::new(); }
-              p.port_name[..len].to_string()
+              p.port_name[len..].to_string()
             })
             .collect::<Vec<String>>();
 
