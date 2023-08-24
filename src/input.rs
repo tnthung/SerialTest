@@ -168,6 +168,10 @@ impl<'a, T> Input<'a, T> {
           println!("");
 
           if !buffer.is_empty() {
+            if let Some(old) = self.history.last() {
+              if old == &buffer { return Flow::Break; }
+            }
+
             self.history.push(buffer.clone());
             self.history_index = self.history.len();
           }
