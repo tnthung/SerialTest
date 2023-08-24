@@ -59,7 +59,6 @@ use crossterm::{
   6.   Delete by word       // not possible currently due to crossterm
   7.   Calculate checksum
   8.   Reverse send
-  9.   Switch port message has wrong padding
 */
 
 
@@ -1275,7 +1274,7 @@ fn main() {
 
               queue!(
                 stdout,
-                Print("Switched to port:  "),
+                Print("Switched to port: "),
                 SetForegroundColor(Color::Green),
                 Print(argument),
                 ResetColor,
