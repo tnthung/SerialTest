@@ -833,6 +833,74 @@ fn main() {
       )
     });
 
+
+  let read_serial = |mut port: Box<dyn SerialPort>| {
+    let mut stdout = std::io::stdout();
+    let mut buffer = [0u8; 1024];
+
+    execute!(
+      stdout,
+      Print("Receiving..."),
+    ).unwrap();
+
+    match port.read(&mut buffer) {
+      Ok(count) => {
+        queue!(
+          stdout,
+          Print("\rRecv"),
+          SetForegroundColor(Color::Green),
+          Print(format!(" {:4} ", count)),
+          ResetColor,
+          Print("bytes: "),
+        ).unwrap();
+
+        let mut tmp = String::new();
+
+        match *mode.borrow() {
+          Mode::ASCII => {
+            for i in buffer[..count].to_vec() {
+              tmp.push_str(get_printable_ascii(
+                if i.is_ascii_graphic() { (i as char).to_string() }
+                else                    { format!("\\{:02X}", i)  },
+              ).as_str());
+            }
+          },
+
+          Mode::HEX => {
+            for i in buffer[..count].to_vec() {
+              tmp.push_str(format!("{:02X}", i).as_str());
+            }
+          },
+        }
+
+        queue!(
+          stdout,
+          Print(tmp),
+        ).unwrap();
+      },
+
+      Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
+        queue!(
+          stdout,
+          SetForegroundColor(Color::Red),
+          Print("\rTimed out."),
+          Print(format!("({} ms)", port.timeout().as_millis())),
+          ResetColor,
+        ).unwrap();
+      },
+
+      _ => {
+        queue!(
+          stdout,
+          SetForegroundColor(Color::Red),
+          Print("\rFailed to receive."),
+          ResetColor,
+        ).unwrap();
+      },
+    }
+  };
+
+
   loop {
     let prompt_result = input.prompt();
 
@@ -994,70 +1062,17 @@ fn main() {
             },
           }
 
-          port.flush().unwrap();
-        }
-      },
-
-      (CommandType::Receive, "") => {
-        let mut buffer = [0u8; 1024];
-
         execute!(
           stdout,
-          Print("Receiving..."),
+            Print("\n"),
         ).unwrap();
 
-        match port.read(&mut buffer) {
-          Ok(count) => {
-            queue!(
-              stdout,
-              Print(format!("\rRecv {:4} bytes: ", count)),
-            ).unwrap();
-
-            let mut tmp = String::new();
-
-            match *mode.borrow() {
-              Mode::ASCII => {
-                for i in buffer[..count].to_vec() {
-                  tmp.push_str(get_printable_ascii(
-                    if i.is_ascii_graphic() { (i as char).to_string() }
-                    else                    { format!("\\{:02X}", i)  },
-                  ).as_str());
+          read_serial(port.try_clone().unwrap());
                 }
               },
 
-              Mode::HEX => {
-                for i in buffer[..count].to_vec() {
-                  tmp.push_str(format!("{:02X}", i).as_str());
-                }
-              },
-            }
-
-            queue!(
-              stdout,
-              Print(tmp),
-            ).unwrap();
-          },
-
-          Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
-            queue!(
-              stdout,
-              SetForegroundColor(Color::Red),
-              Print("\rTimed out."),
-              Print(format!("({} ms)", port.timeout().as_millis())),
-              ResetColor,
-            ).unwrap();
-          },
-
-          _ => {
-            queue!(
-              stdout,
-              SetForegroundColor(Color::Red),
-              Print("\rFailed to receive."),
-              ResetColor,
-            ).unwrap();
-          },
-        }
-      },
+      (CommandType::Receive, "") =>
+        (read_serial)(port.try_clone().unwrap()),
 
       (CommandType::Flush, "") =>
         match port.flush() {
