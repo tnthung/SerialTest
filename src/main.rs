@@ -755,7 +755,7 @@ fn main() {
       queue!(
         stdout,
         SetForegroundColor(Color::Red),
-        Print("Press again to exit.\n"),
+        Print("\nPress again to exit.\n\n"),
         ResetColor,
       ).unwrap();
 
