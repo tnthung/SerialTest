@@ -304,13 +304,17 @@ fn main() {
         .preprocessor(|s, _| {
           let par = s.concat();
 
-          input::Processed {
-            buffer   : s,
-            candidate: vec![ "none", "odd", "even",]
+          let mut candidate = vec![ "none", "odd", "even",]
               .into_iter()
               .filter(|s| s.starts_with(&par))
               .map(|s| s[par.len()..].to_string())
-              .collect::<Vec<String>>(),
+            .collect::<Vec<String>>();
+
+          candidate.retain(|s| s.len() > 0);
+
+          input::Processed {
+            buffer   : s,
+            candidate,
           }
         })
         .renderer(|s, c| {
