@@ -901,11 +901,16 @@ fn main() {
       (CommandType::Receive, "") => {
         let mut buffer = [0u8; 1024];
 
+        execute!(
+          stdout,
+          Print("Receiving..."),
+        ).unwrap();
+
         match port.read(&mut buffer) {
           Ok(count) => {
             queue!(
               stdout,
-              Print(format!("Received {:4} bytes: ", count)),
+              Print(format!("\rReceived {:4} bytes: ", count)),
             ).unwrap();
 
             let mut tmp = String::new();
@@ -927,11 +932,21 @@ fn main() {
             }
           },
 
-          Err(_) => {
+          Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
             queue!(
               stdout,
               SetForegroundColor(Color::Red),
-              Print("Failed to receive."),
+              Print("\rTimed out."),
+              Print(format!("({} ms)", port.timeout().as_millis())),
+              ResetColor,
+            ).unwrap();
+          },
+
+          _ => {
+            queue!(
+              stdout,
+              SetForegroundColor(Color::Red),
+              Print("\rFailed to receive."),
               ResetColor,
             ).unwrap();
           },
