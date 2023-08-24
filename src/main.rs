@@ -803,12 +803,14 @@ fn main() {
         }
 
         else {
+          let mut buffer   = Vec::<u8>::new();
+          let mut sent_str = String::new();
+
+          // convert message to bytes
           match *mode.borrow() {
             Mode::ASCII => {
-              let mut buffer = Vec::<u8>::new();
               let fragments = string_to_vec_ascii(arg.to_string());
 
-              // convert message to bytes
               let mut was_slash = false;
 
               for i in &fragments {
@@ -834,70 +836,47 @@ fn main() {
                 buffer.push(i.as_bytes()[0]);
               }
 
-              // send message
-              match port.write(&buffer) {
-                Ok(_) => {
-                  queue!(
-                    stdout,
-                    Print("Sent "),
-                    SetForegroundColor(Color::Green),
-                    Print(format!("{:4}", buffer.len())),
-                    ResetColor,
-                    Print(" bytes: "),
-                    Print(fragments
-                      .iter()
-                      .map(|s| get_printable_ascii(s.to_string()))
-                      .collect::<String>()),
-                  ).unwrap();
-                },
-
-                Err(_) => {
-                  queue!(
-                    stdout,
-                    SetForegroundColor(Color::Red),
-                    Print("Failed to send."),
-                    ResetColor,
-                  ).unwrap();
-                },
-              }
+              sent_str = fragments
+                .iter()
+                .map(|s| get_printable_ascii(s.to_string()))
+                .collect::<String>();
             },
 
             Mode::HEX => {
-              let mut buffer = Vec::<u8>::new();
-
-              // convert message to bytes
               let mut tmp = arg;
 
               while tmp.len() > 0 {
                 if let Ok(v) = u8::from_str_radix(&tmp[..2], 16) {
                   buffer.push(v);
                   tmp = &tmp[2..];
+
+                  sent_str.push_str(format!("{:02X} ", v).as_str());
                 }
               }
+            },
+          }
 
-              // send message
-              match port.write(&buffer) {
-                Ok(_) => {
-                  queue!(
-                    stdout,
-                    Print("Sent "),
-                    SetForegroundColor(Color::Green),
-                    Print(format!("{:4}", buffer.len())),
-                    ResetColor,
-                    Print(" bytes: "),
-                    Print(arg),
-                  ).unwrap();
-                },
+          // send message
+          match port.write(&buffer) {
+            Ok(_) => {
+              queue!(
+                stdout,
+                Print("Sent "),
+                SetForegroundColor(Color::Green),
+                Print(format!("{:4}", buffer.len())),
+                ResetColor,
+                Print(" bytes: "),
+                Print(sent_str),
+              ).unwrap();
+            },
 
-                Err(_) => {
-                  queue!(
-                    stdout,
-                    SetForegroundColor(Color::Red),
-                    Print("Failed to send."),
-                    ResetColor,
-                  ).unwrap();
-                },
-              }
+            Err(_) => {
+              queue!(
+                stdout,
+                SetForegroundColor(Color::Red),
+                Print("Failed to send."),
+                ResetColor,
+              ).unwrap();
             },
           }
 
