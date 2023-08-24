@@ -305,9 +305,9 @@ fn main() {
           let par = s.concat();
 
           let mut candidate = vec![ "none", "odd", "even",]
-              .into_iter()
-              .filter(|s| s.starts_with(&par))
-              .map(|s| s[par.len()..].to_string())
+            .into_iter()
+            .filter(|s| s.starts_with(&par))
+            .map(|s| s[par.len()..].to_string())
             .collect::<Vec<String>>();
 
           candidate.retain(|s| s.len() > 0);
@@ -784,7 +784,9 @@ fn main() {
         ).unwrap();
       },
 
-      (CommandType::Send, arg) => {
+      (CommandType::Send, _) => {
+        let arg = argument.as_str();
+
         // check if message is valid
         if {
           match *mode.borrow() {
