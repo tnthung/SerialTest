@@ -83,7 +83,7 @@ const HELP_MESSAGE: &str = "Help:
     get-cts          : quarry CTS state
     get-dsr          : quarry DSR state
     get-ri           : quarry RI  state
-    get-cd           : quarry CD  state\n";
+    get-cd           : quarry CD  state\n\n";
 
 
 
