@@ -558,6 +558,7 @@ fn main() {
               candidate.push("set-par" .to_string());
               candidate.push("set-data".to_string());
               candidate.push("set-stop".to_string());
+              candidate.push("set-time".to_string());
               candidate.push("set-rts" .to_string());
               candidate.push("set-dtr" .to_string());
               candidate.push("get-cts" .to_string());
