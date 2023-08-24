@@ -205,6 +205,27 @@ fn main() {
 
     { // get baud rate
       let mut input = input::InputBuilder::new("Baud Rate: ")
+        .preprocessor(|s, _| {
+          let rate = s.concat();
+
+          let mut candidate = vec![
+            "9600"  .to_string(),
+            "19200" .to_string(),
+            "38400" .to_string(),
+            "57600" .to_string(),
+            "115200".to_string(),
+          ].into_iter()
+            .filter(|s| s.starts_with(&rate))
+            .map   (|s| s[rate.len()..].to_string())
+            .collect::<Vec<String>>();
+
+          candidate.retain(|s| s.len() > 0);
+
+          input::Processed {
+            buffer   : s,
+            candidate,
+          }
+        })
         .renderer(|s, c| {
           let mut processed = String::new();
 
