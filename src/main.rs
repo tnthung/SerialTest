@@ -912,7 +912,7 @@ fn main() {
               },
 
               Mode::HEX => {
-                for i in buffer {
+                for i in buffer[..count].to_vec() {
                   tmp.push_str(format!("{:02X}", i).as_str());
                 }
               },
