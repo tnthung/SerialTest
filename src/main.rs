@@ -299,7 +299,7 @@ fn main() {
     }
 
     { // get parity
-      let mut input = input::InputBuilder::new("Parity: ")
+      let mut input = input::InputBuilder::new("Parity   : ")
         .preprocessor(|s, _| {
           let par = s.concat();
 
