@@ -893,6 +893,8 @@ fn main() {
               }
             },
           }
+
+          port.flush().unwrap();
         }
       },
 
