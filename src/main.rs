@@ -18,7 +18,12 @@ use command::CommandType;
 
 use serialport::{
   self,
+  Parity,
+  DataBits,
+  StopBits,
+  SerialPort,
   FlowControl,
+  available_ports,
 };
 
 use crossterm::{
@@ -132,12 +137,12 @@ fn main() {
 
     let port_name: String;
     let baud_rate: u32;
-    let data_bits: serialport::DataBits;
-    let parity   : serialport::Parity  ;
-    let stop_bits: serialport::StopBits;
+    let data_bits: DataBits;
+    let parity   : Parity  ;
+    let stop_bits: StopBits;
 
     { // get port name
-      let ports = serialport::available_ports().unwrap();
+      let ports = available_ports().unwrap();
 
       let mut input = input::InputBuilder::new("Port Name: ")
         .preprocessor(|s, _| {
@@ -310,10 +315,10 @@ fn main() {
         match input.prompt() {
           Ok(bit) => {
             match bit.as_str() {
-              "5" => data_bits = serialport::DataBits::Five,
-              "6" => data_bits = serialport::DataBits::Six,
-              "7" => data_bits = serialport::DataBits::Seven,
-              "8" => data_bits = serialport::DataBits::Eight,
+              "5" => data_bits = DataBits::Five,
+              "6" => data_bits = DataBits::Six,
+              "7" => data_bits = DataBits::Seven,
+              "8" => data_bits = DataBits::Eight,
 
               _ => {
                 queue!(
@@ -383,9 +388,9 @@ fn main() {
         match input.prompt() {
           Ok(par) => {
             match par.as_str() {
-              "none" => parity = serialport::Parity::None,
-              "odd"  => parity = serialport::Parity::Odd,
-              "even" => parity = serialport::Parity::Even,
+              "none" => parity = Parity::None,
+              "odd"  => parity = Parity::Odd,
+              "even" => parity = Parity::Even,
 
               _ => {
                 queue!(
@@ -451,8 +456,8 @@ fn main() {
         match input.prompt() {
           Ok(bit) => {
             match bit.as_str() {
-              "1" => stop_bits = serialport::StopBits::One,
-              "2" => stop_bits = serialport::StopBits::Two,
+              "1" => stop_bits = StopBits::One,
+              "2" => stop_bits = StopBits::Two,
 
               _ => {
                 queue!(
@@ -556,7 +561,7 @@ fn main() {
           },
 
           "set-port" => {
-            let ports = serialport::available_ports().unwrap();
+            let ports = available_ports().unwrap();
 
             candidate.extend(ports.iter()
               .map(|p| p.port_name.clone()));
@@ -1190,7 +1195,7 @@ fn main() {
         },
 
       (CommandType::SetPort, _) =>
-        if let Some(_) = serialport::available_ports()
+        if let Some(_) = available_ports()
           .unwrap()
           .iter()
           .find(|p| p.port_name == argument) {
@@ -1281,10 +1286,10 @@ fn main() {
       (CommandType::SetDataBits, arg) =>
         match {
           match arg {
-            "5" => port.set_data_bits(serialport::DataBits::Five ),
-            "6" => port.set_data_bits(serialport::DataBits::Six  ),
-            "7" => port.set_data_bits(serialport::DataBits::Seven),
-            "8" => port.set_data_bits(serialport::DataBits::Eight),
+            "5" => port.set_data_bits(DataBits::Five ),
+            "6" => port.set_data_bits(DataBits::Six  ),
+            "7" => port.set_data_bits(DataBits::Seven),
+            "8" => port.set_data_bits(DataBits::Eight),
 
             _ => Err(serialport::Error::new(
               serialport::ErrorKind::InvalidInput,
@@ -1324,9 +1329,9 @@ fn main() {
       (CommandType::SetParity, arg) =>
         match {
           match arg.to_lowercase().as_str() {
-            "none" => port.set_parity(serialport::Parity::None),
-            "odd"  => port.set_parity(serialport::Parity::Odd ),
-            "even" => port.set_parity(serialport::Parity::Even),
+            "none" => port.set_parity(Parity::None),
+            "odd"  => port.set_parity(Parity::Odd ),
+            "even" => port.set_parity(Parity::Even),
 
             _ => Err(serialport::Error::new(
               serialport::ErrorKind::InvalidInput,
@@ -1366,8 +1371,8 @@ fn main() {
       (CommandType::SetStopBits, arg) =>
         match {
           match arg {
-            "1" => port.set_stop_bits(serialport::StopBits::One),
-            "2" => port.set_stop_bits(serialport::StopBits::Two),
+            "1" => port.set_stop_bits(StopBits::One),
+            "2" => port.set_stop_bits(StopBits::Two),
 
             _ => Err(serialport::Error::new(
               serialport::ErrorKind::InvalidInput,
@@ -1449,9 +1454,9 @@ fn main() {
       (CommandType::SetFlow, arg) =>
         match {
           match arg.to_lowercase().as_str() {
-            "none"     => port.set_flow_control(serialport::FlowControl::None    ),
-            "software" => port.set_flow_control(serialport::FlowControl::Software),
-            "hardware" => port.set_flow_control(serialport::FlowControl::Hardware),
+            "none"     => port.set_flow_control(FlowControl::None    ),
+            "software" => port.set_flow_control(FlowControl::Software),
+            "hardware" => port.set_flow_control(FlowControl::Hardware),
 
             _ => Err(serialport::Error::new(
               serialport::ErrorKind::InvalidInput,
