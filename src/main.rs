@@ -101,7 +101,6 @@ fn main() {
     stdout,
     Clear(ClearType::All),
     MoveTo(0, 0),
-    EnableMouseCapture,
     SetTitle("Serial Tester"),
   ).unwrap();
 
