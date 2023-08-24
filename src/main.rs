@@ -482,8 +482,11 @@ fn main() {
       match command_str.as_str() {
         "send" if *mode.borrow() == Mode::ASCII => {
           processed.extend(command);
+
+          if has_space {
           processed.push(" ".to_string());
           processed.extend(string_to_vec_ascii(buffer.concat()));
+          }
         },
 
         _ => {
@@ -728,7 +731,11 @@ fn main() {
     })
     .build_with_final(|s| {
       let (command_str, buffer_str) = s.split_at(s.find(' ').unwrap_or(s.len()));
-      (CommandType::from_str(command_str).unwrap(), buffer_str.to_string())
+      (
+        CommandType::from_str(command_str).unwrap(),
+        if buffer_str.len() > 0 { buffer_str[1..].to_string() }
+        else                    { ""             .to_string() }
+      )
     });
 
   loop {
