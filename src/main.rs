@@ -896,7 +896,7 @@ fn main() {
           Ok(count) => {
             queue!(
               stdout,
-              Print(format!("\rReceived {:4} bytes: ", count)),
+              Print(format!("\rRecv {:4} bytes: ", count)),
             ).unwrap();
 
             let mut tmp = String::new();
