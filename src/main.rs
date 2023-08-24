@@ -47,6 +47,17 @@ use crossterm::{
 
 
 
+/* TODO
+
+  2.   Flow control
+  4.   Copy & paste
+  4-1. Select
+  6.   Delete by word       // not possible currently due to crossterm
+*/
+
+
+
+
 const HELP_MESSAGE: &str = "Help:
   Hot keys:
     Ctrl-C × 2: exit
@@ -1123,18 +1134,18 @@ fn main() {
           },
         },
 
-      (CommandType::SetPort, arg) =>
-        if let Some(port_) = serialport::available_ports()
+      (CommandType::SetPort, _) =>
+        if let Some(_) = serialport::available_ports()
           .unwrap()
           .iter()
-          .find(|p| p.port_name == arg) {
+          .find(|p| p.port_name == argument) {
 
-          let new_port = serialport::new(&port_.port_name, port.baud_rate().unwrap())
-            .flow_control(FlowControl::Hardware)
-            .data_bits   (port.data_bits().unwrap())
-            .parity      (port.parity   ().unwrap())
-            .stop_bits   (port.stop_bits().unwrap())
-            .timeout     (port.timeout  ()         )
+          let new_port = serialport::new(
+              &argument, port.baud_rate().unwrap())
+            .data_bits(port.data_bits().unwrap())
+            .parity   (port.parity   ().unwrap())
+            .stop_bits(port.stop_bits().unwrap())
+            .timeout  (port.timeout  ()         )
             .open();
 
           match new_port {
@@ -1143,11 +1154,10 @@ fn main() {
 
               queue!(
                 stdout,
-                Print("Port "),
+                Print("Switched to port:  "),
                 SetForegroundColor(Color::Green),
-                Print(arg),
+                Print(argument),
                 ResetColor,
-                Print(" is now opened."),
               ).unwrap();
             },
 
