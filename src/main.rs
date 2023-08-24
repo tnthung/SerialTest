@@ -484,8 +484,8 @@ fn main() {
           processed.extend(command);
 
           if has_space {
-          processed.push(" ".to_string());
-          processed.extend(string_to_vec_ascii(buffer.concat()));
+            processed.push(" ".to_string());
+            processed.extend(string_to_vec_ascii(buffer.concat()));
           }
         },
 
@@ -917,9 +917,10 @@ fn main() {
 
             match *mode.borrow() {
               Mode::ASCII => {
-                for i in buffer {
+                for i in buffer[..count].to_vec() {
                   tmp.push_str(get_printable_ascii(
-                    format!("\\{:02X}", i)
+                    if i.is_ascii_graphic() { (i as char).to_string() }
+                    else                    { format!("\\{:02X}", i)  },
                   ).as_str());
                 }
               },
@@ -1515,6 +1516,9 @@ fn split_cmd_and_buf(s: Vec<String>) -> (Vec<String>, Vec<String>) {
 
 fn get_printable_ascii(s: String) -> String {
   match s.to_ascii_lowercase().as_str() {
+    | r" "
+    | r"\20" => "[SP]",
+
     r"\00" => "[NUL]",
     r"\01" => "[SOH]",
     r"\02" => "[STX]",
