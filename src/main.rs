@@ -930,6 +930,11 @@ fn main() {
                 }
               },
             }
+
+            queue!(
+              stdout,
+              Print(tmp),
+            ).unwrap();
           },
 
           Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
