@@ -89,7 +89,7 @@ const HELP_MESSAGE: &str = "Help:
     get-cts          : quarry CTS state
     get-dsr          : quarry DSR state
     get-ri           : quarry RI  state
-    get-cd           : quarry CD  state\n\n";
+    get-cd           : quarry CD  state";
 
 
 
@@ -465,6 +465,7 @@ fn main() {
     Clear(ClearType::All),
     MoveTo(0, 0),
     Print(HELP_MESSAGE),
+    Print("\n\n"),
   ).unwrap();
 
 
