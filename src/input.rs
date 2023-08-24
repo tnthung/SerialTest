@@ -167,6 +167,8 @@ impl<'a, T> Input<'a, T> {
         }) => {
           println!("");
 
+          current_line = None;
+
           if !buffer.is_empty() {
             if let Some(old) = self.history.last() {
               if old == &buffer { return Flow::Break; }
@@ -277,15 +279,17 @@ impl<'a, T> Input<'a, T> {
           code: KeyCode::Up,
           ..
         }) => {
+          if self.history_index == self.history.len() &&
+            !buffer.is_empty()
+          {
+            current_line = Some(buffer.clone());
+          }
+
           if self.history_index > 0 {
             self.history_index -= 1;
 
             let tmp = (self.preprocessor)(self.history[
               self.history_index].clone(), cursor);
-
-            if buffer.len() > 0 {
-              current_line = Some(buffer.clone());
-            }
 
             buffer    = tmp.buffer;
             cursor    = buffer.len();
