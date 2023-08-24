@@ -11,6 +11,7 @@ pub enum CommandType {
   Receive,        // receive data
 
   SetMode,        // set mode
+  SetEnding,      // set ending
 
   SetPort,        // set port
   SetBaud,        // set baud rate
@@ -21,6 +22,9 @@ pub enum CommandType {
 
   SetRts,         // set RTS
   SetDtr,         // set DTR
+
+  GetMode,        // get mode
+  GetEnding,      // get ending
 
   GetPort,        // get port
   GetBaud,        // get baud rate
@@ -43,33 +47,36 @@ impl std::str::FromStr for CommandType {
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     match s {
-      "help"     => Ok(CommandType::Help       ),
-      "clear"    => Ok(CommandType::Clear      ),
-      "flush"    => Ok(CommandType::Flush      ),
-      "send"     => Ok(CommandType::Send       ),
-      "recv"     => Ok(CommandType::Receive    ),
-      "set-mode" => Ok(CommandType::SetMode    ),
-      "set-port" => Ok(CommandType::SetPort    ),
-      "set-baud" => Ok(CommandType::SetBaud    ),
-      "set-data" => Ok(CommandType::SetDataBits),
-      "set-par"  => Ok(CommandType::SetParity  ),
-      "set-stop" => Ok(CommandType::SetStopBits),
-      "set-time" => Ok(CommandType::SetTimeout ),
-      "set-rts"  => Ok(CommandType::SetRts     ),
-      "set-dtr"  => Ok(CommandType::SetDtr     ),
-      "get-port" => Ok(CommandType::GetPort    ),
-      "get-baud" => Ok(CommandType::GetBaud    ),
-      "get-data" => Ok(CommandType::GetDataBits),
-      "get-par"  => Ok(CommandType::GetParity  ),
-      "get-stop" => Ok(CommandType::GetStopBits),
-      "get-time" => Ok(CommandType::GetTimeout ),
-      "get-in"   => Ok(CommandType::GetInQue   ),
-      "get-out"  => Ok(CommandType::GetOutQue  ),
-      "get-cts"  => Ok(CommandType::GetCts     ),
-      "get-dsr"  => Ok(CommandType::GetDsr     ),
-      "get-ri"   => Ok(CommandType::GetRi      ),
-      "get-cd"   => Ok(CommandType::GetCd      ),
-      _          => Ok(CommandType::None       ),
+      "help"       => Ok(CommandType::Help       ),
+      "clear"      => Ok(CommandType::Clear      ),
+      "flush"      => Ok(CommandType::Flush      ),
+      "send"       => Ok(CommandType::Send       ),
+      "recv"       => Ok(CommandType::Receive    ),
+      "set-mode"   => Ok(CommandType::SetMode    ),
+      "set-ending" => Ok(CommandType::SetEnding  ),
+      "set-port"   => Ok(CommandType::SetPort    ),
+      "set-baud"   => Ok(CommandType::SetBaud    ),
+      "set-data"   => Ok(CommandType::SetDataBits),
+      "set-par"    => Ok(CommandType::SetParity  ),
+      "set-stop"   => Ok(CommandType::SetStopBits),
+      "set-time"   => Ok(CommandType::SetTimeout ),
+      "set-rts"    => Ok(CommandType::SetRts     ),
+      "set-dtr"    => Ok(CommandType::SetDtr     ),
+      "get-mode"   => Ok(CommandType::GetMode    ),
+      "get-ending" => Ok(CommandType::GetEnding),
+      "get-port"   => Ok(CommandType::GetPort    ),
+      "get-baud"   => Ok(CommandType::GetBaud    ),
+      "get-data"   => Ok(CommandType::GetDataBits),
+      "get-par"    => Ok(CommandType::GetParity  ),
+      "get-stop"   => Ok(CommandType::GetStopBits),
+      "get-time"   => Ok(CommandType::GetTimeout ),
+      "get-in"     => Ok(CommandType::GetInQue   ),
+      "get-out"    => Ok(CommandType::GetOutQue  ),
+      "get-cts"    => Ok(CommandType::GetCts     ),
+      "get-dsr"    => Ok(CommandType::GetDsr     ),
+      "get-ri"     => Ok(CommandType::GetRi      ),
+      "get-cd"     => Ok(CommandType::GetCd      ),
+      _            => Ok(CommandType::None       ),
     }
   }
 }
@@ -84,6 +91,7 @@ impl std::fmt::Display for CommandType {
       CommandType::Send        => write!(f, "Send"       ),
       CommandType::Receive     => write!(f, "Receive"    ),
       CommandType::SetMode     => write!(f, "SetMode"    ),
+      CommandType::SetEnding   => write!(f, "SetEnding"  ),
       CommandType::SetPort     => write!(f, "SetPort"    ),
       CommandType::SetBaud     => write!(f, "SetBaud"    ),
       CommandType::SetDataBits => write!(f, "SetDataBits"),
@@ -92,6 +100,8 @@ impl std::fmt::Display for CommandType {
       CommandType::SetTimeout  => write!(f, "SetTimeout" ),
       CommandType::SetRts      => write!(f, "SetRts"     ),
       CommandType::SetDtr      => write!(f, "SetDtr"     ),
+      CommandType::GetMode     => write!(f, "GetMode"    ),
+      CommandType::GetEnding   => write!(f, "GetEnding"  ),
       CommandType::GetPort     => write!(f, "GetPort"    ),
       CommandType::GetBaud     => write!(f, "GetBaud"    ),
       CommandType::GetDataBits => write!(f, "GetDataBits"),

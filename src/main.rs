@@ -2,6 +2,7 @@ mod mode;
 mod util;
 mod input;
 mod event;
+mod ending;
 mod command;
 
 use std::{
@@ -12,6 +13,7 @@ use std::{
 
 use mode   ::Mode;
 use regex  ::Regex;
+use ending ::Ending;
 use command::CommandType;
 
 use serialport::{
@@ -57,7 +59,8 @@ const HELP_MESSAGE: &str = "Help:
     recv             : receive message
     flush            : flush serial port
 
-    set-mode <mode>  : set mode             mode  : ascii, hex
+    set-mode   <mode>: set mode             mode  : ascii, hex
+    set-ending <end> : set auto ending      end   : none, cr, lf, crlf
 
     set-port <name>  : set port             name  : string
     set-baud <rate>  : set baud rate        rate  : 9600, 19200, 38400, 57600,
@@ -69,6 +72,9 @@ const HELP_MESSAGE: &str = "Help:
 
     set-rts  <state> : set RTS state        state : on, off
     set-dtr  <state> : set DTR state        state : on, off
+
+    get-mode         : quarry mode
+    get-ending       : quarry auto ending
 
     get-port         : quarry port name
     get-baud         : quarry baud rate
@@ -464,6 +470,7 @@ fn main() {
 
   let mode            = RefCell::new(Mode::ASCII);
   let ctrl_c          = RefCell::new(false);
+  let ending          = RefCell::new(Ending::None);
   let has_candidate   = RefCell::new(false);
   let match_candidate = RefCell::new(false);
 
@@ -505,6 +512,13 @@ fn main() {
           "set-mode" => {
             candidate.push("ascii".to_string());
             candidate.push("hex"  .to_string());
+          },
+
+          "set-ending" => {
+            candidate.push("none".to_string());
+            candidate.push("cr"  .to_string());
+            candidate.push("lf"  .to_string());
+            candidate.push("crlf".to_string());
           },
 
           "set-port" => {
@@ -552,32 +566,35 @@ fn main() {
 
           _ => {
             if !has_space {
-              candidate.push("help"    .to_string());
-              candidate.push("clear"   .to_string());
-              candidate.push("send"    .to_string());
-              candidate.push("recv"    .to_string());
-              candidate.push("flush"   .to_string());
-              candidate.push("set-mode".to_string());
-              candidate.push("set-port".to_string());
-              candidate.push("set-baud".to_string());
-              candidate.push("set-par" .to_string());
-              candidate.push("set-data".to_string());
-              candidate.push("set-stop".to_string());
-              candidate.push("set-time".to_string());
-              candidate.push("set-rts" .to_string());
-              candidate.push("set-dtr" .to_string());
-              candidate.push("get-port".to_string());
-              candidate.push("get-baud".to_string());
-              candidate.push("get-data".to_string());
-              candidate.push("get-par" .to_string());
-              candidate.push("get-stop".to_string());
-              candidate.push("get-time".to_string());
-              candidate.push("get-in"  .to_string());
-              candidate.push("get-out" .to_string());
-              candidate.push("get-cts" .to_string());
-              candidate.push("get-dsr" .to_string());
-              candidate.push("get-ri"  .to_string());
-              candidate.push("get-cd"  .to_string());
+              candidate.push("help"      .to_string());
+              candidate.push("clear"     .to_string());
+              candidate.push("send"      .to_string());
+              candidate.push("recv"      .to_string());
+              candidate.push("flush"     .to_string());
+              candidate.push("set-mode"  .to_string());
+              candidate.push("set-ending".to_string());
+              candidate.push("set-port"  .to_string());
+              candidate.push("set-baud"  .to_string());
+              candidate.push("set-par"   .to_string());
+              candidate.push("set-data"  .to_string());
+              candidate.push("set-stop"  .to_string());
+              candidate.push("set-time"  .to_string());
+              candidate.push("set-rts"   .to_string());
+              candidate.push("set-dtr"   .to_string());
+              candidate.push("get-mode"  .to_string());
+              candidate.push("get-ending".to_string());
+              candidate.push("get-port"  .to_string());
+              candidate.push("get-baud"  .to_string());
+              candidate.push("get-data"  .to_string());
+              candidate.push("get-par"   .to_string());
+              candidate.push("get-stop"  .to_string());
+              candidate.push("get-time"  .to_string());
+              candidate.push("get-in"    .to_string());
+              candidate.push("get-out"   .to_string());
+              candidate.push("get-cts"   .to_string());
+              candidate.push("get-dsr"   .to_string());
+              candidate.push("get-ri"    .to_string());
+              candidate.push("get-cd"    .to_string());
             }
           },
         }
@@ -628,6 +645,7 @@ fn main() {
         | "recv"
         | "flush"
         | "set-mode"
+        | "set-ending"
         | "set-port"
         | "set-baud"
         | "set-data"
@@ -636,6 +654,8 @@ fn main() {
         | "set-time"
         | "set-rts"
         | "set-dtr"
+        | "get-mode"
+        | "get-ending"
         | "get-port"
         | "get-baud"
         | "get-data"
@@ -683,6 +703,7 @@ fn main() {
       // buffer
       match command_str.as_str() {
         | "set-mode"
+        | "set-ending"
         | "set-port"
         | "set-par"
         | "set-data"
@@ -872,6 +893,31 @@ fn main() {
             },
           }
 
+          // add ending
+          match *ending.borrow() {
+            Ending::None => {},
+            Ending::CR   => {
+              buffer.push('\r' as u8);
+              sent_str.push_str(
+                if *mode.borrow() == Mode::ASCII { "[CR]" }
+                else                             { "0D"   });
+            },
+            Ending::LF   => {
+              buffer.push('\n' as u8);
+              sent_str.push_str(
+                if *mode.borrow() == Mode::ASCII { "[LF]" }
+                else                             { "0A"   });
+            },
+            Ending::CRLF => {
+              buffer.push('\r' as u8);
+              buffer.push('\n' as u8);
+
+              sent_str.push_str(
+                if *mode.borrow() == Mode::ASCII { "[CR][LF]" }
+                else                             { "0D 0A"    });
+            },
+          }
+
           // send message
           match port.write(&buffer) {
             Ok(_) => {
@@ -1011,6 +1057,66 @@ fn main() {
               stdout,
               SetForegroundColor(Color::Red),
               Print("Invalid mode."),
+              ResetColor,
+            ).unwrap();
+          },
+        },
+
+      (CommandType::SetEnding, arg) =>
+        match arg.to_lowercase().as_str() {
+          "none" => {
+            *ending.borrow_mut() = Ending::None;
+
+            queue!(
+              stdout,
+              Print("Ending: "),
+              SetForegroundColor(Color::Green),
+              Print("None"),
+              ResetColor,
+            ).unwrap();
+          },
+
+          "cr" => {
+            *ending.borrow_mut() = Ending::CR;
+
+            queue!(
+              stdout,
+              Print("Ending: "),
+              SetForegroundColor(Color::Green),
+              Print("CR"),
+              ResetColor,
+            ).unwrap();
+          },
+
+          "lf" => {
+            *ending.borrow_mut() = Ending::LF;
+
+            queue!(
+              stdout,
+              Print("Ending: "),
+              SetForegroundColor(Color::Green),
+              Print("LF"),
+              ResetColor,
+            ).unwrap();
+          },
+
+          "crlf" => {
+            *ending.borrow_mut() = Ending::CRLF;
+
+            queue!(
+              stdout,
+              Print("Ending: "),
+              SetForegroundColor(Color::Green),
+              Print("CRLF"),
+              ResetColor,
+            ).unwrap();
+          },
+
+          _ => {
+            queue!(
+              stdout,
+              SetForegroundColor(Color::Red),
+              Print("Invalid ending."),
               ResetColor,
             ).unwrap();
           },
@@ -1355,6 +1461,26 @@ fn main() {
             ).unwrap();
           },
         },
+
+      (CommandType::GetMode, "") => {
+        queue!(
+          stdout,
+          Print("Mode: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{:?}", mode.borrow())),
+          ResetColor,
+        ).unwrap();
+      },
+
+      (CommandType::GetEnding, "") => {
+        queue!(
+          stdout,
+          Print("Ending: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{:?}", ending.borrow())),
+          ResetColor,
+        ).unwrap();
+      },
 
       (CommandType::GetPort, "") => {
         queue!(
