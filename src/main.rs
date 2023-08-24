@@ -70,6 +70,16 @@ const HELP_MESSAGE: &str = "Help:
     set-rts  <state> : set RTS state        state : on, off
     set-dtr  <state> : set DTR state        state : on, off
 
+    get-port         : quarry port name
+    get-baud         : quarry baud rate
+    get-data         : quarry data bits
+    get-par          : quarry parity
+    get-stop         : quarry stop bits
+    get-time         : quarry timeout
+
+    get-in           : quarry input  buffer
+    get-out          : quarry output buffer
+
     get-cts          : quarry CTS state
     get-dsr          : quarry DSR state
     get-ri           : quarry RI  state
@@ -102,11 +112,11 @@ fn main() {
       Print("Set the serial port.\n\n"),
     ).unwrap();
 
-    let mut port_name = String::new();
-    let mut baud_rate = 19200;
-    let mut data_bits = serialport::DataBits::Eight;
-    let mut parity    = serialport::Parity  ::None;
-    let mut stop_bits = serialport::StopBits::One;
+    let port_name: String;
+    let baud_rate: u32;
+    let data_bits: serialport::DataBits;
+    let parity   : serialport::Parity  ;
+    let stop_bits: serialport::StopBits;
 
     { // get port name
       let ports = serialport::available_ports().unwrap();
@@ -556,6 +566,14 @@ fn main() {
               candidate.push("set-time".to_string());
               candidate.push("set-rts" .to_string());
               candidate.push("set-dtr" .to_string());
+              candidate.push("get-port".to_string());
+              candidate.push("get-baud".to_string());
+              candidate.push("get-data".to_string());
+              candidate.push("get-par" .to_string());
+              candidate.push("get-stop".to_string());
+              candidate.push("get-time".to_string());
+              candidate.push("get-in"  .to_string());
+              candidate.push("get-out" .to_string());
               candidate.push("get-cts" .to_string());
               candidate.push("get-dsr" .to_string());
               candidate.push("get-ri"  .to_string());
@@ -618,6 +636,14 @@ fn main() {
         | "set-time"
         | "set-rts"
         | "set-dtr"
+        | "get-port"
+        | "get-baud"
+        | "get-data"
+        | "get-par"
+        | "get-stop"
+        | "get-time"
+        | "get-in"
+        | "get-out"
         | "get-cts"
         | "get-dsr"
         | "get-ri"
@@ -1325,6 +1351,110 @@ fn main() {
               stdout,
               SetForegroundColor(Color::Red),
               Print("Failed to set DTR state."),
+              ResetColor,
+            ).unwrap();
+          },
+        },
+
+      (CommandType::GetPort, "") => {
+        queue!(
+          stdout,
+          Print("Port: "),
+          SetForegroundColor(Color::Green),
+          Print(port.name().unwrap()),
+          ResetColor,
+        ).unwrap();
+      },
+
+      (CommandType::GetBaud, "") => {
+        queue!(
+          stdout,
+          Print("Baud rate: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{}", port.baud_rate().unwrap())),
+          ResetColor,
+        ).unwrap();
+      },
+
+      (CommandType::GetDataBits, "") => {
+        queue!(
+          stdout,
+          Print("Data bits: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{}", port.data_bits().unwrap())),
+          ResetColor,
+        ).unwrap();
+      },
+
+      (CommandType::GetParity, "") => {
+        queue!(
+          stdout,
+          Print("Parity: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{:?}", port.parity().unwrap())),
+          ResetColor,
+        ).unwrap();
+      },
+
+      (CommandType::GetStopBits, "") => {
+        queue!(
+          stdout,
+          Print("Stop bits: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{:?}", port.stop_bits().unwrap())),
+          ResetColor,
+        ).unwrap();
+      },
+
+      (CommandType::GetTimeout, "") => {
+        queue!(
+          stdout,
+          Print("Timeout: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{} ms", port.timeout().as_millis())),
+          ResetColor,
+        ).unwrap();
+      },
+
+      (CommandType::GetInQue, "") =>
+        match port.bytes_to_read() {
+          Ok(count) => {
+            queue!(
+              stdout,
+              Print("In: "),
+              SetForegroundColor(Color::Green),
+              Print(format!("{:4} bytes", count)),
+              ResetColor,
+            ).unwrap();
+          },
+
+          Err(_) => {
+            queue!(
+              stdout,
+              SetForegroundColor(Color::Red),
+              Print("Failed to get In bytes."),
+              ResetColor,
+            ).unwrap();
+          },
+        },
+
+      (CommandType::GetOutQue, "") =>
+        match port.bytes_to_write() {
+          Ok(count) => {
+            queue!(
+              stdout,
+              Print("Out: "),
+              SetForegroundColor(Color::Green),
+              Print(format!("{:4} bytes", count)),
+              ResetColor,
+            ).unwrap();
+          },
+
+          Err(_) => {
+            queue!(
+              stdout,
+              SetForegroundColor(Color::Red),
+              Print("Failed to get Out bytes."),
               ResetColor,
             ).unwrap();
           },

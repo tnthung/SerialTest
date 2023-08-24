@@ -22,6 +22,16 @@ pub enum CommandType {
   SetRts,         // set RTS
   SetDtr,         // set DTR
 
+  GetPort,        // get port
+  GetBaud,        // get baud rate
+  GetDataBits,    // get data bits
+  GetParity,      // get parity
+  GetStopBits,    // get stop bits
+  GetTimeout,     // get timeout
+
+  GetInQue,       // get input queue
+  GetOutQue,      // get output queue
+
   GetCts,         // get CTS
   GetDsr,         // get DSR
   GetRi,          // get RI
@@ -47,6 +57,14 @@ impl std::str::FromStr for CommandType {
       "set-time" => Ok(CommandType::SetTimeout ),
       "set-rts"  => Ok(CommandType::SetRts     ),
       "set-dtr"  => Ok(CommandType::SetDtr     ),
+      "get-port" => Ok(CommandType::GetPort    ),
+      "get-baud" => Ok(CommandType::GetBaud    ),
+      "get-data" => Ok(CommandType::GetDataBits),
+      "get-par"  => Ok(CommandType::GetParity  ),
+      "get-stop" => Ok(CommandType::GetStopBits),
+      "get-time" => Ok(CommandType::GetTimeout ),
+      "get-in"   => Ok(CommandType::GetInQue   ),
+      "get-out"  => Ok(CommandType::GetOutQue  ),
       "get-cts"  => Ok(CommandType::GetCts     ),
       "get-dsr"  => Ok(CommandType::GetDsr     ),
       "get-ri"   => Ok(CommandType::GetRi      ),
@@ -74,6 +92,14 @@ impl std::fmt::Display for CommandType {
       CommandType::SetTimeout  => write!(f, "SetTimeout" ),
       CommandType::SetRts      => write!(f, "SetRts"     ),
       CommandType::SetDtr      => write!(f, "SetDtr"     ),
+      CommandType::GetPort     => write!(f, "GetPort"    ),
+      CommandType::GetBaud     => write!(f, "GetBaud"    ),
+      CommandType::GetDataBits => write!(f, "GetDataBits"),
+      CommandType::GetParity   => write!(f, "GetParity"  ),
+      CommandType::GetStopBits => write!(f, "GetStopBits"),
+      CommandType::GetTimeout  => write!(f, "GetTimeout" ),
+      CommandType::GetInQue    => write!(f, "GetInQue"   ),
+      CommandType::GetOutQue   => write!(f, "GetOutQue"  ),
       CommandType::GetCts      => write!(f, "GetCts"     ),
       CommandType::GetDsr      => write!(f, "GetDsr"     ),
       CommandType::GetRi       => write!(f, "GetRi"      ),
