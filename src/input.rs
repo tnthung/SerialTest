@@ -125,9 +125,10 @@ impl<'a, T> Input<'a, T> {
 
     let stdout = std::io::stdout();
 
-    let mut cursor    = 0usize;
-    let mut buffer    = Vec::<String>::new();
-    let mut candidate = Vec::<String>::new();
+    let mut cursor       = 0usize;
+    let mut buffer       = Vec::<String>::new();
+    let mut candidate    = Vec::<String>::new();
+    let mut current_line = None::<Vec<String>>;
 
     let mut interrupted = false;
 
@@ -271,6 +272,10 @@ impl<'a, T> Input<'a, T> {
             let tmp = (self.preprocessor)(self.history[
               self.history_index].clone(), cursor);
 
+            if buffer.len() > 0 {
+              current_line = Some(buffer.clone());
+            }
+
             buffer    = tmp.buffer;
             cursor    = buffer.len();
             candidate = tmp.candidate;
@@ -293,12 +298,23 @@ impl<'a, T> Input<'a, T> {
             candidate = tmp.candidate;
           }
 
-          else {
+          else if self.history_index != self.history.len() {
             self.history_index = self.history.len();
 
-            cursor    = 0;
-            buffer    = Vec::new();
-            candidate = Vec::new();
+            if let Some(line) = current_line.take() {
+              let len = line.len();
+              let tmp = (self.preprocessor)(line, len);
+
+              buffer    = tmp.buffer;
+              cursor    = buffer.len();
+              candidate = tmp.candidate;
+            }
+
+            else {
+              cursor    = 0;
+              buffer    = Vec::new();
+              candidate = Vec::new();
+            }
           }
         },
 
