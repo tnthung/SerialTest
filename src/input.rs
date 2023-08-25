@@ -174,6 +174,10 @@ impl<'a, T> Input<'a, T> {
               if old == &buffer { return Flow::Break; }
             }
 
+            if self.history.len() > 50 {
+              self.history.remove(0);
+            }
+
             self.history.push(buffer.clone());
             self.history_index = self.history.len();
           }
