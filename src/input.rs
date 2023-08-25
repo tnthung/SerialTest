@@ -185,6 +185,32 @@ impl<'a, T> Input<'a, T> {
           return Flow::Break;
         },
 
+        // Paste
+        Event::Key(KeyEvent {
+          code: KeyCode::Char('v'),
+          modifiers: KeyModifiers::CONTROL,
+          ..
+        }) => {
+          if let Ok(s) = std::str::from_utf8(
+            &std::process::Command::new("powershell")
+              .args(&["-Command", "Get-Clipboard"])
+              .output()
+              .unwrap()
+              .stdout
+          ) {
+            let before = buffer[..cursor].to_vec();
+            let after  = buffer[cursor..].to_vec();
+
+            buffer = before;
+            buffer.extend(s.chars()
+              .into_iter()
+              .map(|c| c.to_string()));
+            buffer.extend(after);
+
+            cursor += s.len();
+          }
+        },
+
         // Backspace
         Event::Key(KeyEvent {
           code: KeyCode::Backspace,
