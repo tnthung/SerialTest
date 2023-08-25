@@ -521,7 +521,7 @@ fn main() {
 
   let mut input = input::InputBuilder::new("> ")
     .preprocessor(|s, _| {
-      let (command, buffer) = split_cmd_and_buf(s.clone());
+      let (command, buffer) = split_by_first_space(s.clone());
 
       let buffer_str  = buffer .concat();
       let command_str = command.concat();
@@ -682,7 +682,7 @@ fn main() {
     .renderer(|s, c| {
       let mut c = c;
 
-      let (command, buffer) = split_cmd_and_buf(s.clone());
+      let (command, buffer) = split_by_first_space(s.clone());
 
       let buffer_str  = buffer .concat();
       let command_str = command.concat();
@@ -1930,7 +1930,7 @@ fn string_to_vec_ascii(s: String) -> Vec<String> {
 }
 
 
-fn split_cmd_and_buf(s: Vec<String>) -> (Vec<String>, Vec<String>) {
+fn split_by_first_space(s: Vec<String>) -> (Vec<String>, Vec<String>) {
   if let Some(index) = s.iter().position(|s| s == " ") {
     let (cmd, arg) = s.split_at(index);
     (cmd.to_vec(), arg[1..].to_vec())
