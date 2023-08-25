@@ -63,7 +63,7 @@ use crossterm::{
 
 
 
-const MAX_ARG_COUNT: usize = 2;
+const MAX_ARG_COUNT: usize = 3;
 
 const HELP_MESSAGE: &str = "Help:
   Hot keys:
@@ -111,7 +111,9 @@ const HELP_MESSAGE: &str = "Help:
     get-cts          : quarry CTS state
     get-dsr          : quarry DSR state
     get-ri           : quarry RI  state
-    get-cd           : quarry CD  state";
+    get-cd           : quarry CD  state
+
+    sum <type> <data>: calculate checksum";
 
 
 
@@ -520,12 +522,13 @@ fn main() {
   let candidate_states = RefCell::new([
     CandidateState::None,
     CandidateState::None,
+    CandidateState::None,
   ]);
 
 
   let mut input = input::InputBuilder::new("> ")
     .preprocessor(|s, _| {
-      let (parts, last_index) = split_by_space::<MAX_ARG_COUNT>(s.clone());
+      let (parts, space_count) = split_by_space::<MAX_ARG_COUNT>(s.clone());
 
       let command     = parts[0].clone();
       let command_str = command.concat();
@@ -540,10 +543,25 @@ fn main() {
         "send" if *mode.borrow() == Mode::ASCII => {
           processed.extend(command);
 
-          if last_index > 0 {
+          if space_count > 0 {
             processed.push(" ".to_string());
             processed.extend(string_to_vec_ascii(
               parts[1..].join(&" ".to_string()).concat()));
+          }
+        },
+
+        "sum" if *mode.borrow() == Mode::ASCII => {
+          processed.extend(command);
+
+          if space_count > 0 {
+            processed.push(" ".to_string());
+            processed.extend(parts[1].clone());
+          }
+
+          if space_count > 1 {
+            processed.push(" ".to_string());
+            processed.extend(string_to_vec_ascii(
+              parts[2..].join(&" ".to_string()).concat()));
           }
         },
 
@@ -553,114 +571,123 @@ fn main() {
       }
 
       // candidate
-      if processed.len() > 0 {
-        match command_str.as_str() {
-          "set-mode" => {
-            candidate.push("ascii".to_string());
-            candidate.push("hex"  .to_string());
-          },
+      match command_str.as_str() {
+        "set-mode" => {
+          candidate.push("ascii".to_string());
+          candidate.push("hex"  .to_string());
+        },
 
-          "set-ending" => {
-            candidate.push("none".to_string());
-            candidate.push("cr"  .to_string());
-            candidate.push("lf"  .to_string());
-            candidate.push("crlf".to_string());
-          },
+        "set-ending" => {
+          candidate.push("none".to_string());
+          candidate.push("cr"  .to_string());
+          candidate.push("lf"  .to_string());
+          candidate.push("crlf".to_string());
+        },
 
-          "set-port" => {
-            let ports = available_ports().unwrap();
+        "set-port" => {
+          let ports = available_ports().unwrap();
 
-            candidate.extend(ports.iter()
-              .map(|p| p.port_name.clone()));
-          },
+          candidate.extend(ports.iter()
+            .map(|p| p.port_name.clone()));
+        },
 
-          "set-baud" => {
-            candidate.push("9600"  .to_string());
-            candidate.push("19200" .to_string());
-            candidate.push("38400" .to_string());
-            candidate.push("57600" .to_string());
-            candidate.push("115200".to_string());
-          },
+        "set-baud" => {
+          candidate.push("9600"  .to_string());
+          candidate.push("19200" .to_string());
+          candidate.push("38400" .to_string());
+          candidate.push("57600" .to_string());
+          candidate.push("115200".to_string());
+        },
 
-          "set-par" => {
-            candidate.push("none".to_string());
-            candidate.push("odd" .to_string());
-            candidate.push("even".to_string());
-          },
+        "set-par" => {
+          candidate.push("none".to_string());
+          candidate.push("odd" .to_string());
+          candidate.push("even".to_string());
+        },
 
-          "set-data" => {
-            candidate.push("5".to_string());
-            candidate.push("6".to_string());
-            candidate.push("7".to_string());
-            candidate.push("8".to_string());
-          },
+        "set-data" => {
+          candidate.push("5".to_string());
+          candidate.push("6".to_string());
+          candidate.push("7".to_string());
+          candidate.push("8".to_string());
+        },
 
-          "set-stop" => {
-            candidate.push("1".to_string());
-            candidate.push("2".to_string());
-          },
+        "set-stop" => {
+          candidate.push("1".to_string());
+          candidate.push("2".to_string());
+        },
 
-          "set-time" => {
-            candidate.push("100" .to_string());
-            candidate.push("500" .to_string());
-            candidate.push("1000".to_string());
-            candidate.push("2000".to_string());
-          },
+        "set-time" => {
+          candidate.push("100" .to_string());
+          candidate.push("500" .to_string());
+          candidate.push("1000".to_string());
+          candidate.push("2000".to_string());
+        },
 
-          "set-flow" => {
-            candidate.push("none"    .to_string());
-            candidate.push("software".to_string());
-            candidate.push("hardware".to_string());
-          },
+        "set-flow" => {
+          candidate.push("none"    .to_string());
+          candidate.push("software".to_string());
+          candidate.push("hardware".to_string());
+        },
 
-          | "set-rev"
-          | "set-rts"
-          | "set-dtr" => {
-            candidate.push("on" .to_string());
-            candidate.push("off".to_string());
-          },
+        | "set-rev"
+        | "set-rts"
+        | "set-dtr" => {
+          candidate.push("on" .to_string());
+          candidate.push("off".to_string());
+        },
 
-          _ if parts[1..].concat().is_empty() => {
-            candidate.push("help"      .to_string());
-            candidate.push("clear"     .to_string());
-            candidate.push("send"      .to_string());
-            candidate.push("recv"      .to_string());
-            candidate.push("flush"     .to_string());
-            candidate.push("set-mode"  .to_string());
-            candidate.push("set-ending".to_string());
-            candidate.push("set-rev"   .to_string());
-            candidate.push("set-port"  .to_string());
-            candidate.push("set-baud"  .to_string());
-            candidate.push("set-par"   .to_string());
-            candidate.push("set-data"  .to_string());
-            candidate.push("set-stop"  .to_string());
-            candidate.push("set-time"  .to_string());
-            candidate.push("set-flow"  .to_string());
-            candidate.push("set-rts"   .to_string());
-            candidate.push("set-dtr"   .to_string());
-            candidate.push("get-mode"  .to_string());
-            candidate.push("get-ending".to_string());
-            candidate.push("get-rev"   .to_string());
-            candidate.push("get-port"  .to_string());
-            candidate.push("get-baud"  .to_string());
-            candidate.push("get-data"  .to_string());
-            candidate.push("get-par"   .to_string());
-            candidate.push("get-stop"  .to_string());
-            candidate.push("get-time"  .to_string());
-            candidate.push("get-flow"  .to_string());
-            candidate.push("get-in"    .to_string());
-            candidate.push("get-out"   .to_string());
-            candidate.push("get-cts"   .to_string());
-            candidate.push("get-dsr"   .to_string());
-            candidate.push("get-ri"    .to_string());
-            candidate.push("get-cd"    .to_string());
-          },
+        "sum" if space_count == 1 => {
+          candidate.push("crc16"          .to_string());
+          candidate.push("sum-byte"       .to_string());
+          candidate.push("sum-byte-2comp" .to_string());
+        },
 
-          _ => {},
-        }
+        _ if space_count == 0 => {
+          candidate.push("help"      .to_string());
+          candidate.push("clear"     .to_string());
+          candidate.push("send"      .to_string());
+          candidate.push("recv"      .to_string());
+          candidate.push("flush"     .to_string());
+          candidate.push("set-mode"  .to_string());
+          candidate.push("set-ending".to_string());
+          candidate.push("set-rev"   .to_string());
+          candidate.push("set-port"  .to_string());
+          candidate.push("set-baud"  .to_string());
+          candidate.push("set-par"   .to_string());
+          candidate.push("set-data"  .to_string());
+          candidate.push("set-stop"  .to_string());
+          candidate.push("set-time"  .to_string());
+          candidate.push("set-flow"  .to_string());
+          candidate.push("set-rts"   .to_string());
+          candidate.push("set-dtr"   .to_string());
+          candidate.push("get-mode"  .to_string());
+          candidate.push("get-ending".to_string());
+          candidate.push("get-rev"   .to_string());
+          candidate.push("get-port"  .to_string());
+          candidate.push("get-baud"  .to_string());
+          candidate.push("get-data"  .to_string());
+          candidate.push("get-par"   .to_string());
+          candidate.push("get-stop"  .to_string());
+          candidate.push("get-time"  .to_string());
+          candidate.push("get-flow"  .to_string());
+          candidate.push("get-in"    .to_string());
+          candidate.push("get-out"   .to_string());
+          candidate.push("get-cts"   .to_string());
+          candidate.push("get-dsr"   .to_string());
+          candidate.push("get-ri"    .to_string());
+          candidate.push("get-cd"    .to_string());
+          candidate.push("sum"       .to_string());
+        },
+
+        _ => {},
       }
 
-      let last_part = parts[last_index].clone().concat();
+      // last part
+      let (last_part, last_index) = get_last(&parts, space_count);
+      let last_part = last_part.concat();
+
+      // check if last part matches any candidate
       let match_any = candidate.iter().any(|s| s == &last_part);
 
       // filter candidate
@@ -683,10 +710,10 @@ fn main() {
       }
     })
     .renderer(|s, mut c| {
-      let (parts, _) = split_by_space::<MAX_ARG_COUNT>(s.clone());
+      let (parts, space_count) = split_by_space::<MAX_ARG_COUNT>(s.clone());
 
       let command     = parts[0].clone();
-      let command_str = command.concat();
+      let command_str = command.unwrap_or(Vec::new()).concat();
 
       let mut column    = 0usize;
       let mut processed = String::new();
@@ -727,12 +754,13 @@ fn main() {
         | "get-cts"
         | "get-dsr"
         | "get-ri"
-        | "get-cd" => {
+        | "get-cd"
+        | "sum" => {
           processed.push_str(&SetForegroundColor(Color::Blue).to_string());
         },
 
         _ => {
-          if parts.len() > 1 || candidate_states[0] == CandidateState::None{
+          if space_count > 1 || candidate_states[0] == CandidateState::None {
             processed.push_str(&SetForegroundColor(Color::Red).to_string());
           }
         },
@@ -755,7 +783,7 @@ fn main() {
       column += calc_col(command_str.len());
 
       // space
-      if parts.len() > 1 {
+      if space_count > 1 {
         processed.push(' ');
         column += calc_col(1);
       }
@@ -773,7 +801,8 @@ fn main() {
         | "set-flow"
         | "set-rts"
         | "set-dtr" => {
-          let buffer_str = parts[1..].join(&" ".to_string()).concat();
+          let (buffer, _) = get_last(&parts);
+          let buffer_str = buffer.concat();
 
           processed.push_str(&SetForegroundColor(
             match candidate_states[1] {
@@ -791,7 +820,8 @@ fn main() {
         // Argument can match
         | "set-baud"
         | "set-time" => {
-          let buffer_str = parts[1..].join(&" ".to_string()).concat();
+          let (buffer, _) = get_last(&parts);
+          let buffer_str = buffer.concat();
 
           processed.push_str(&SetForegroundColor(
             if re_pos_int.is_match(&buffer_str) { Color::White }
@@ -804,42 +834,45 @@ fn main() {
 
         // Argument in special format
         "send" => {
-          let buffer     = parts[1..].join(&" ".to_string());
+          let (buffer, last_index) = get_last(&parts);
           let buffer_str = buffer.concat();
 
-          match *mode.borrow() {
-            Mode::ASCII => {
-              processed.push_str(&SetForegroundColor(
-                if re_ascii.is_match(&buffer_str) { Color::White }
-                else                              { Color::Red   }
-              ).to_string());
+          if last_index == 1 {
+            match *mode.borrow() {
+              Mode::ASCII => {
+                processed.push_str(&SetForegroundColor(
+                  if re_ascii.is_match(&buffer_str) { Color::White }
+                  else                              { Color::Red   }
+                ).to_string());
 
-              for i in buffer {
-                let ch = get_printable_ascii(i);
-                processed.push_str(ch.as_str());
+                for i in buffer {
+                  let ch = get_printable_ascii(i);
+                  processed.push_str(ch.as_str());
 
-                if c > 0 {
-                  c      -= 1;
-                  column += ch.len();
+                  if c > 0 {
+                    c      -= 1;
+                    column += ch.len();
+                  }
                 }
-              }
-            },
+              },
 
-            Mode::HEX => {
-              processed.push_str(&SetForegroundColor(
-                if re_hex.is_match(&buffer_str) { Color::White }
-                else                            { Color::Red   }
-              ).to_string());
-              processed.push_str(&buffer_str);
+              Mode::HEX => {
+                processed.push_str(&SetForegroundColor(
+                  if re_hex.is_match(&buffer_str) { Color::White }
+                  else                            { Color::Red   }
+                ).to_string());
+                processed.push_str(&buffer_str);
 
-              column += calc_col(buffer_str.len());
-            },
+                column += calc_col(buffer_str.len());
+              },
+            }
           }
         },
 
         // No argument
         _ => {
-          let buffer_str = parts[1..].join(&" ".to_string()).concat();
+          let (buffer, _) = get_last(&parts);
+          let buffer_str = buffer.concat();
 
           processed.push_str(&SetForegroundColor(Color::Red).to_string());
           processed.push_str(&buffer_str);
@@ -1954,32 +1987,28 @@ fn string_to_vec_ascii(s: String) -> Vec<String> {
 }
 
 
-fn split_by_space<const N: usize>(s: Vec<String>) -> ([Vec<String>; N], usize) {
+fn split_by_space<const N: usize>(s: Vec<String>) -> ([Option<Vec<String>>; N], usize) {
   let mut tmp = s
     .split(|s| s == " ")
     .map  (|s| s.to_vec())
     .collect::<Vec<Vec<String>>>();
 
-  let last_index;
+  let mut ret = [(); N]
+    .map(|_| None::<Vec<String>>);
 
   if tmp.len() > N {
-    last_index = N-1;
-
-    let rest = tmp[(N-1)..].join(&" ".to_string());
+    let rest = tmp[(N-1)..]
+      .join(&" ".to_string());
 
     tmp[N-1] = rest;
     tmp.truncate(N);
   }
 
-  else {
-    last_index = tmp.len()-1;
-
-    while tmp.len() < N {
-      tmp.push(Vec::<String>::new());
-    }
+  for i in 0..N {
+    ret[i] = tmp.get(i).map(|v| v.clone());
   }
 
-  ([(); N].map(|_| tmp.remove(0)), last_index)
+  (ret, tmp.len() - 1)
 }
 
 
@@ -2023,4 +2052,64 @@ fn get_printable_ascii(s: String) -> String {
     r"\7f" => "[DEL]",
     _      => &s,
   }.to_string()
+}
+
+
+fn get_max_arg_count(command: &String) -> usize {
+  match command.as_str() {
+    "sum" => 2,
+
+    | "help"
+    | "clear"
+    | "flush"
+    | "receive"
+    | "get-mode"
+    | "get-ending"
+    | "get-reverse"
+    | "get-port"
+    | "get-baud"
+    | "get-data"
+    | "get-par"
+    | "get-stop"
+    | "get-time"
+    | "get-flow"
+    | "get-in"
+    | "get-out"
+    | "get-cts"
+    | "get-dsr"
+    | "get-ri"
+    | "get-cd" => 0,
+
+    _ => 1,
+  }
+}
+
+
+fn get_last(parts: &[Option<Vec<String>>; MAX_ARG_COUNT]) -> (Vec<String>, usize) {
+  if parts[0].is_none() {
+    return (Vec::<String>::new(), 0);
+  }
+
+  let command = parts[0].as_ref().unwrap().concat();
+  let max_arg = get_max_arg_count(&command);
+
+  let space_count = parts.iter().position(|p| p.is_none()).unwrap() - 1;
+
+  if space_count <= max_arg {
+    return (
+      parts[space_count]
+        .as_ref()
+        .unwrap()
+        .clone(),
+      space_count
+    );
+  }
+
+  return (
+    parts[max_arg..]
+      .iter()
+      .filter_map(|p| p.clone())
+      .fold(Vec::new(), |mut acc, v| { acc.extend(v); acc }),
+    max_arg
+  );
 }
