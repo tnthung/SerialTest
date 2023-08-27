@@ -54,20 +54,20 @@ use crossterm::{
 
 /* TODO
 
-  4.   Copy & paste
+  4.   Copy
   4-1. Select
   6.   Delete by word       // not possible currently due to crossterm
   7.   Calculate checksum
-  8.   Reverse send
+  8.   Advanced help command
 */
 
 
 
-const MAX_ARG_COUNT: usize = 3;
 
 const HELP_MESSAGE: &str = "Help:
   Hot keys:
     Ctrl-C × 2: exit
+    Ctrl-V    : paste
 
   Commands:
     help             : show this
@@ -111,9 +111,7 @@ const HELP_MESSAGE: &str = "Help:
     get-cts          : quarry CTS state
     get-dsr          : quarry DSR state
     get-ri           : quarry RI  state
-    get-cd           : quarry CD  state
-
-    sum <type> <data>: calculate checksum";
+    get-cd           : quarry CD  state";
 
 
 
@@ -121,9 +119,9 @@ const HELP_MESSAGE: &str = "Help:
 fn main() {
   let mut stdout = std::io::stdout();
 
-  let re_hex     = Regex::new(r"^([0-9A-Fa-f]{2})+$"                                      ).unwrap();
-  let re_ascii   = Regex::new(r"^((\\\\)|(\\[01][0-9A-Fa-f])|(\\7[fF])|([\ -~&&[^\\]]))+$").unwrap();
-  let re_pos_int = Regex::new(r"^[1-9][0-9]*$"                                            ).unwrap();
+  let re_int     = Regex::new(r"^[1-9][0-9]*$"                                                   ).unwrap();
+  let re_hex     = Regex::new(r"^([0-9A-Fa-f]{2})+$"                                             ).unwrap();
+  let re_ascii   = Regex::new(r"^((\\\\)|(\\[01][0-9A-Fa-f])|(\\20)|(\\7[fF])|([\ -~&&[^\\]]))+$").unwrap();
 
 
   // clear screen
@@ -514,11 +512,10 @@ fn main() {
   ).unwrap();
 
 
-  let mode            = RefCell::new(Mode::ASCII);
-  let ctrl_c          = RefCell::new(false);
-  let ending          = RefCell::new(Ending::None);
-  let reverse         = RefCell::new(false);
-
+  let mode             = RefCell::new(Mode::ASCII);
+  let ending           = RefCell::new(Ending::None);
+  let ctrl_c           = RefCell::new(false);
+  let reverse          = RefCell::new(false);
   let candidate_states = RefCell::new([
     CandidateState::None,
     CandidateState::None,
@@ -528,10 +525,7 @@ fn main() {
 
   let mut input = input::InputBuilder::new("> ")
     .preprocessor(|s, _| {
-      let (parts, space_count) = split_by_space::<MAX_ARG_COUNT>(s.clone());
-
-      let command     = parts[0].clone();
-      let command_str = command.concat();
+      let (command, fragments) = parse_input(s.clone(), *mode.borrow());
 
       let mut processed = Vec::<String>::new();
       let mut candidate = Vec::<String>::new();
@@ -539,29 +533,14 @@ fn main() {
       let mut candidate_states = candidate_states.borrow_mut();
 
       // processed
-      match command_str.as_str() {
-        "send" if *mode.borrow() == Mode::ASCII => {
-          processed.extend(command);
+      match command {
+        CommandType::Send => {
+          processed.extend(fragments[0].clone());
 
-          if space_count > 0 {
+          if fragments.len() > 1 {
             processed.push(" ".to_string());
             processed.extend(string_to_vec_ascii(
-              parts[1..].join(&" ".to_string()).concat()));
-          }
-        },
-
-        "sum" if *mode.borrow() == Mode::ASCII => {
-          processed.extend(command);
-
-          if space_count > 0 {
-            processed.push(" ".to_string());
-            processed.extend(parts[1].clone());
-          }
-
-          if space_count > 1 {
-            processed.push(" ".to_string());
-            processed.extend(string_to_vec_ascii(
-              parts[2..].join(&" ".to_string()).concat()));
+              fragments[1].concat()));
           }
         },
 
@@ -571,27 +550,27 @@ fn main() {
       }
 
       // candidate
-      match command_str.as_str() {
-        "set-mode" => {
+      match command {
+        CommandType::SetMode => {
           candidate.push("ascii".to_string());
           candidate.push("hex"  .to_string());
         },
 
-        "set-ending" => {
+        CommandType::SetEnding => {
           candidate.push("none".to_string());
           candidate.push("cr"  .to_string());
           candidate.push("lf"  .to_string());
           candidate.push("crlf".to_string());
         },
 
-        "set-port" => {
+        CommandType::SetPort => {
           let ports = available_ports().unwrap();
 
           candidate.extend(ports.iter()
             .map(|p| p.port_name.clone()));
         },
 
-        "set-baud" => {
+        CommandType::SetBaud => {
           candidate.push("9600"  .to_string());
           candidate.push("19200" .to_string());
           candidate.push("38400" .to_string());
@@ -599,51 +578,45 @@ fn main() {
           candidate.push("115200".to_string());
         },
 
-        "set-par" => {
+        CommandType::SetParity => {
           candidate.push("none".to_string());
           candidate.push("odd" .to_string());
           candidate.push("even".to_string());
         },
 
-        "set-data" => {
+        CommandType::SetDataBits => {
           candidate.push("5".to_string());
           candidate.push("6".to_string());
           candidate.push("7".to_string());
           candidate.push("8".to_string());
         },
 
-        "set-stop" => {
+        CommandType::SetStopBits => {
           candidate.push("1".to_string());
           candidate.push("2".to_string());
         },
 
-        "set-time" => {
+        CommandType::SetTimeout => {
           candidate.push("100" .to_string());
           candidate.push("500" .to_string());
           candidate.push("1000".to_string());
           candidate.push("2000".to_string());
         },
 
-        "set-flow" => {
+        CommandType::SetFlow => {
           candidate.push("none"    .to_string());
           candidate.push("software".to_string());
           candidate.push("hardware".to_string());
         },
 
-        | "set-rev"
-        | "set-rts"
-        | "set-dtr" => {
+        | CommandType::SetReverse
+        | CommandType::SetRts
+        | CommandType::SetDtr => {
           candidate.push("on" .to_string());
           candidate.push("off".to_string());
         },
 
-        "sum" if space_count == 1 => {
-          candidate.push("crc16"          .to_string());
-          candidate.push("sum-byte"       .to_string());
-          candidate.push("sum-byte-2comp" .to_string());
-        },
-
-        _ if space_count == 0 => {
+        _ if fragments.len() == 1 => {
           candidate.push("help"      .to_string());
           candidate.push("clear"     .to_string());
           candidate.push("send"      .to_string());
@@ -677,15 +650,14 @@ fn main() {
           candidate.push("get-dsr"   .to_string());
           candidate.push("get-ri"    .to_string());
           candidate.push("get-cd"    .to_string());
-          candidate.push("sum"       .to_string());
         },
 
         _ => {},
       }
 
       // last part
-      let (last_part, last_index) = get_last(&parts, space_count);
-      let last_part = last_part.concat();
+      let last_index = fragments.len() - 1;
+      let last_part  = fragments[last_index].concat();
 
       // check if last part matches any candidate
       let match_any = candidate.iter().any(|s| s == &last_part);
@@ -710,174 +682,116 @@ fn main() {
       }
     })
     .renderer(|s, mut c| {
-      let (parts, space_count) = split_by_space::<MAX_ARG_COUNT>(s.clone());
-
-      let command     = parts[0].clone();
-      let command_str = command.unwrap_or(Vec::new()).concat();
+      let (command, fragments) = parse_input(s.clone(), *mode.borrow());
 
       let mut column    = 0usize;
       let mut processed = String::new();
 
       let candidate_states = candidate_states.borrow();
 
-      // command
-      match command_str.as_str() {
-        | "help"
-        | "clear"
-        | "send"
-        | "recv"
-        | "flush"
-        | "set-mode"
-        | "set-ending"
-        | "set-rev"
-        | "set-port"
-        | "set-baud"
-        | "set-data"
-        | "set-par"
-        | "set-stop"
-        | "set-time"
-        | "set-flow"
-        | "set-rts"
-        | "set-dtr"
-        | "get-mode"
-        | "get-ending"
-        | "get-rev"
-        | "get-port"
-        | "get-baud"
-        | "get-data"
-        | "get-par"
-        | "get-stop"
-        | "get-time"
-        | "get-flow"
-        | "get-in"
-        | "get-out"
-        | "get-cts"
-        | "get-dsr"
-        | "get-ri"
-        | "get-cd"
-        | "sum" => {
-          processed.push_str(&SetForegroundColor(Color::Blue).to_string());
-        },
-
-        _ => {
-          if space_count > 1 || candidate_states[0] == CandidateState::None {
-            processed.push_str(&SetForegroundColor(Color::Red).to_string());
+      // function for incrementing column
+      let mut incr_column = |arr: &mut String, buf: Vec<String>| {
+        for i in buf {
+          if c != 0 {
+            c      -= 1;
+            column += i.len();
           }
-        },
-      }
 
-      processed.push_str(&command_str);
-      processed.push_str(&ResetColor.to_string());
-
-      let mut calc_col = |len: usize| {
-        if c == 0 { return 0; }
-
-        let mut ret = len;
-        if ret > c { ret = c; }
-
-        c -= ret;
-
-        ret
+          arr.push_str(i.as_str());
+        }
       };
 
-      column += calc_col(command_str.len());
+      // command color
+      processed.push_str(&SetForegroundColor(
+        match candidate_states[0] {
+          CandidateState::Match => Color::Blue ,
+          CandidateState::Has   => Color::White,
+          _                     => Color::Red  ,
+        }).to_string());
 
-      // space
-      if space_count > 1 {
-        processed.push(' ');
-        column += calc_col(1);
+      // add command
+      incr_column(&mut processed, fragments[0].clone());
+      processed.push_str(&ResetColor.to_string());
+
+      // return if no argument
+      if fragments.len() == 1 {
+        return (processed, column);
       }
 
+      // add space
+      incr_column(&mut processed, vec![" ".to_string()]);
+
       // buffer
-      match command_str.as_str() {
+      match command {
         // Argument must match
-        | "set-mode"
-        | "set-ending"
-        | "set-rev"
-        | "set-port"
-        | "set-par"
-        | "set-data"
-        | "set-stop"
-        | "set-flow"
-        | "set-rts"
-        | "set-dtr" => {
-          let (buffer, _) = get_last(&parts);
-          let buffer_str = buffer.concat();
+        | CommandType::SetMode
+        | CommandType::SetEnding
+        | CommandType::SetReverse
+        | CommandType::SetPort
+        | CommandType::SetDataBits
+        | CommandType::SetParity
+        | CommandType::SetStopBits
+        | CommandType::SetFlow
+        | CommandType::SetRts
+        | CommandType::SetDtr  => {
+          let arg = fragments[1].concat();
 
           processed.push_str(&SetForegroundColor(
             match candidate_states[1] {
-              CandidateState::Match
-                if parts.len() < 3  => Color::Green,
+              CandidateState::Match => Color::Green,
               CandidateState::Has   => Color::White,
               _                     => Color::Red,
-            }
-          ).to_string());
-          processed.push_str(&buffer_str);
+            }).to_string());
 
-          column += calc_col(buffer_str.len());
+          incr_column(&mut processed, vec![arg]);
         },
 
         // Argument can match
-        | "set-baud"
-        | "set-time" => {
-          let (buffer, _) = get_last(&parts);
-          let buffer_str = buffer.concat();
+        | CommandType::SetBaud
+        | CommandType::SetTimeout => {
+          let arg = fragments[1].concat();
 
           processed.push_str(&SetForegroundColor(
-            if re_pos_int.is_match(&buffer_str) { Color::White }
-            else                                { Color::Red   }
+            if re_int.is_match(&arg) { Color::White }
+            else                     { Color::Red   }
           ).to_string());
-          processed.push_str(&buffer_str);
 
-          column += calc_col(buffer_str.len());
+          incr_column(&mut processed, vec![arg]);
         },
 
         // Argument in special format
-        "send" => {
-          let (buffer, last_index) = get_last(&parts);
-          let buffer_str = buffer.concat();
+        CommandType::Send => {
+          let raw_arg = fragments[1].clone();
+          let     arg = raw_arg.concat();
 
-          if last_index == 1 {
-            match *mode.borrow() {
-              Mode::ASCII => {
-                processed.push_str(&SetForegroundColor(
-                  if re_ascii.is_match(&buffer_str) { Color::White }
-                  else                              { Color::Red   }
-                ).to_string());
+          match *mode.borrow() {
+            Mode::ASCII => {
+              processed.push_str(&SetForegroundColor(
+                if re_ascii.is_match(&arg) { Color::White }
+                else                       { Color::Red   }
+              ).to_string());
 
-                for i in buffer {
-                  let ch = get_printable_ascii(i);
-                  processed.push_str(ch.as_str());
+              incr_column(&mut processed,
+                raw_arg.iter().map(|i|
+                  get_printable_ascii(i.clone())
+                ).collect());
+            },
 
-                  if c > 0 {
-                    c      -= 1;
-                    column += ch.len();
-                  }
-                }
-              },
+            Mode::HEX => {
+              processed.push_str(&SetForegroundColor(
+                if re_hex.is_match(&arg) { Color::White }
+                else                     { Color::Red   }
+              ).to_string());
 
-              Mode::HEX => {
-                processed.push_str(&SetForegroundColor(
-                  if re_hex.is_match(&buffer_str) { Color::White }
-                  else                            { Color::Red   }
-                ).to_string());
-                processed.push_str(&buffer_str);
-
-                column += calc_col(buffer_str.len());
-              },
-            }
+              incr_column(&mut processed, vec![arg]);
+            },
           }
         },
 
         // No argument
         _ => {
-          let (buffer, _) = get_last(&parts);
-          let buffer_str = buffer.concat();
-
           processed.push_str(&SetForegroundColor(Color::Red).to_string());
-          processed.push_str(&buffer_str);
-
-          column += calc_col(buffer_str.len());
+          incr_column(&mut processed, fragments[1].clone());
         },
       }
 
@@ -1966,7 +1880,7 @@ fn string_to_vec_ascii(s: String) -> Vec<String> {
 
     if tmp.starts_with("\\") && tmp.len() > 2 {
       if let Ok(v) = u8::from_str_radix(&tmp[1..3], 16) {
-        if v < ' ' as u8 || v == 127 {
+        if v <= ' ' as u8 || v == 127 {
           ret.push(tmp[..3].to_string());
           tmp = tmp[3..].to_string();
           continue;
@@ -1975,7 +1889,7 @@ fn string_to_vec_ascii(s: String) -> Vec<String> {
     }
 
     if tmp.starts_with(" ") {
-      ret.push("\\20".to_string());
+      ret.push(r"\20".to_string());
       tmp = tmp[1..].to_string();
       continue;
     }
@@ -1987,36 +1901,8 @@ fn string_to_vec_ascii(s: String) -> Vec<String> {
 }
 
 
-fn split_by_space<const N: usize>(s: Vec<String>) -> ([Option<Vec<String>>; N], usize) {
-  let mut tmp = s
-    .split(|s| s == " ")
-    .map  (|s| s.to_vec())
-    .collect::<Vec<Vec<String>>>();
-
-  let mut ret = [(); N]
-    .map(|_| None::<Vec<String>>);
-
-  if tmp.len() > N {
-    let rest = tmp[(N-1)..]
-      .join(&" ".to_string());
-
-    tmp[N-1] = rest;
-    tmp.truncate(N);
-  }
-
-  for i in 0..N {
-    ret[i] = tmp.get(i).map(|v| v.clone());
-  }
-
-  (ret, tmp.len() - 1)
-}
-
-
 fn get_printable_ascii(s: String) -> String {
   match s.to_ascii_lowercase().as_str() {
-    | r" "
-    | r"\20" => "[SP]",
-
     r"\00" => "[NUL]",
     r"\01" => "[SOH]",
     r"\02" => "[STX]",
@@ -2049,67 +1935,85 @@ fn get_printable_ascii(s: String) -> String {
     r"\1d" => "[GS]",
     r"\1e" => "[RS]",
     r"\1f" => "[US]",
+    r"\20" => "[SP]",
     r"\7f" => "[DEL]",
     _      => &s,
   }.to_string()
 }
 
 
-fn get_max_arg_count(command: &String) -> usize {
-  match command.as_str() {
-    "sum" => 2,
+fn parse_input(s: Vec<String>, mode: Mode) -> (
+  CommandType,          // type
+  Vec<Vec<String>>,     // arguments
+) {
+  let mut ret = (CommandType::None, Vec::<Vec<String>>::new());
 
-    | "help"
-    | "clear"
-    | "flush"
-    | "receive"
-    | "get-mode"
-    | "get-ending"
-    | "get-reverse"
-    | "get-port"
-    | "get-baud"
-    | "get-data"
-    | "get-par"
-    | "get-stop"
-    | "get-time"
-    | "get-flow"
-    | "get-in"
-    | "get-out"
-    | "get-cts"
-    | "get-dsr"
-    | "get-ri"
-    | "get-cd" => 0,
+  // split by space
+  let fragments = s
+    .split(|s| s == " ")
+    .map(|s| s.to_vec())
+    .collect::<Vec<Vec<String>>>();
 
-    _ => 1,
+  // get command
+  let command = fragments[0].concat();
+
+  // match command
+  match command.to_lowercase().as_str() {
+    "help"       => ret.0 = CommandType::Help       ,
+    "clear"      => ret.0 = CommandType::Clear      ,
+    "send"       => ret.0 = CommandType::Send       ,
+    "recv"       => ret.0 = CommandType::Receive    ,
+    "flush"      => ret.0 = CommandType::Flush      ,
+    "set-mode"   => ret.0 = CommandType::SetMode    ,
+    "set-ending" => ret.0 = CommandType::SetEnding  ,
+    "set-rev"    => ret.0 = CommandType::SetReverse ,
+    "set-port"   => ret.0 = CommandType::SetPort    ,
+    "set-baud"   => ret.0 = CommandType::SetBaud    ,
+    "set-data"   => ret.0 = CommandType::SetDataBits,
+    "set-par"    => ret.0 = CommandType::SetParity  ,
+    "set-stop"   => ret.0 = CommandType::SetStopBits,
+    "set-time"   => ret.0 = CommandType::SetTimeout ,
+    "set-flow"   => ret.0 = CommandType::SetFlow    ,
+    "set-rts"    => ret.0 = CommandType::SetRts     ,
+    "set-dtr"    => ret.0 = CommandType::SetDtr     ,
+    "get-mode"   => ret.0 = CommandType::GetMode    ,
+    "get-ending" => ret.0 = CommandType::GetEnding  ,
+    "get-rev"    => ret.0 = CommandType::GetReverse ,
+    "get-port"   => ret.0 = CommandType::GetPort    ,
+    "get-baud"   => ret.0 = CommandType::GetBaud    ,
+    "get-data"   => ret.0 = CommandType::GetDataBits,
+    "get-par"    => ret.0 = CommandType::GetParity  ,
+    "get-stop"   => ret.0 = CommandType::GetStopBits,
+    "get-time"   => ret.0 = CommandType::GetTimeout ,
+    "get-flow"   => ret.0 = CommandType::GetFlow    ,
+    "get-in"     => ret.0 = CommandType::GetInQue   ,
+    "get-out"    => ret.0 = CommandType::GetOutQue  ,
+    "get-cts"    => ret.0 = CommandType::GetCts     ,
+    "get-dsr"    => ret.0 = CommandType::GetDsr     ,
+    "get-ri"     => ret.0 = CommandType::GetRi      ,
+    "get-cd"     => ret.0 = CommandType::GetCd      ,
+    _            => ret.0 = CommandType::None       ,
   }
-}
 
+  // set command
+  ret.1.push(fragments[0].clone());
 
-fn get_last(parts: &[Option<Vec<String>>; MAX_ARG_COUNT]) -> (Vec<String>, usize) {
-  if parts[0].is_none() {
-    return (Vec::<String>::new(), 0);
+  // get argument list
+  if fragments.len() > 1 {
+    match ret.0 {
+      CommandType::Send if mode == Mode::ASCII => {
+        ret.1.push(fragments[1..].join(&r"\20".to_string()));
+      },
+
+      CommandType::Send => {
+          ret.1.push(fragments[1..].concat());
+      },
+
+    _ => {
+        ret.1.push(fragments[1..].join(&" ".to_string()));
+    },
+  }
   }
 
-  let command = parts[0].as_ref().unwrap().concat();
-  let max_arg = get_max_arg_count(&command);
-
-  let space_count = parts.iter().position(|p| p.is_none()).unwrap() - 1;
-
-  if space_count <= max_arg {
-    return (
-      parts[space_count]
-        .as_ref()
-        .unwrap()
-        .clone(),
-      space_count
-    );
-  }
-
-  return (
-    parts[max_arg..]
-      .iter()
-      .filter_map(|p| p.clone())
-      .fold(Vec::new(), |mut acc, v| { acc.extend(v); acc }),
-    max_arg
-  );
+  return ret;
 }
