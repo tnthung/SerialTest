@@ -58,7 +58,6 @@ use crossterm::{
   4-1. Select
   6.   Delete by word       // not possible currently due to crossterm
   7.   Calculate checksum
-  8.   Advanced help command
 */
 
 
@@ -70,48 +69,47 @@ const HELP_MESSAGE: &str = "Help:
     Ctrl-V    : paste
 
   Commands:
-    help             : show this
-    clear            : clear screen
+    help                : show this
+    clear               : clear screen
 
-    send <message>   : send message
-    recv             : receive message
-    flush            : flush serial port
+    send       <message>: send message
+    recv                : receive message
+    flush               : flush serial port
 
-    set-mode   <mode>: set mode             mode  : ascii, hex
-    set-ending <end> : set auto ending      end   : none, cr, lf, crlf
-    set-rev    <rev> : set reverse send     rev   : on, off
+    set-mode   <mode>   : set mode
+    set-ending <ending> : set auto ending
+    set-rev    <state>  : set reverse send
 
-    set-port <name>  : set port             name  : string
-    set-baud <rate>  : set baud rate        rate  : 9600, 19200, 38400, 57600,
-                                                    115200, or custom
-    set-data <dbits> : set data bits        dbits : 5, 6, 7, 8
-    set-par  <parity>: set parity           parity: none, odd, even
-    set-stop <sbits> : set stop bits        sbits : 1, 2
-    set-time <time>  : set timeout          time  : milliseconds
-    set-flow <flow>  : set flow control     flow  : none, software, hardware
+    set-port   <name>   : set port
+    set-baud   <rate>   : set baud rate
+    set-data   <dbits>  : set data bits
+    set-par    <parity> : set parity
+    set-stop   <sbits>  : set stop bits
+    set-time   <time>   : set timeout
+    set-flow   <flow>   : set flow control
 
-    set-rts  <state> : set RTS state        state : on, off
-    set-dtr  <state> : set DTR state        state : on, off
+    set-rts    <state>  : set RTS state
+    set-dtr    <state>  : set DTR state
 
-    get-mode         : quarry mode
-    get-ending       : quarry auto ending
-    get-rev          : quarry reverse send
+    get-mode            : quarry mode
+    get-ending          : quarry auto ending
+    get-rev             : quarry reverse send
 
-    get-port         : quarry port name
-    get-baud         : quarry baud rate
-    get-data         : quarry data bits
-    get-par          : quarry parity
-    get-stop         : quarry stop bits
-    get-time         : quarry timeout
-    get-flow         : quarry flow control
+    get-port            : quarry port name
+    get-baud            : quarry baud rate
+    get-data            : quarry data bits
+    get-par             : quarry parity
+    get-stop            : quarry stop bits
+    get-time            : quarry timeout
+    get-flow            : quarry flow control
 
-    get-in           : quarry input  buffer
-    get-out          : quarry output buffer
+    get-in              : quarry input  buffer
+    get-out             : quarry output buffer
 
-    get-cts          : quarry CTS state
-    get-dsr          : quarry DSR state
-    get-ri           : quarry RI  state
-    get-cd           : quarry CD  state";
+    get-cts             : quarry CTS state
+    get-dsr             : quarry DSR state
+    get-ri              : quarry RI  state
+    get-cd              : quarry CD  state";
 
 
 
@@ -551,6 +549,42 @@ fn main() {
 
       // candidate
       match command {
+        CommandType::Help => {
+          candidate.push("help"      .to_string());
+          candidate.push("clear"     .to_string());
+          candidate.push("send"      .to_string());
+          candidate.push("recv"      .to_string());
+          candidate.push("flush"     .to_string());
+          candidate.push("set-mode"  .to_string());
+          candidate.push("set-ending".to_string());
+          candidate.push("set-rev"   .to_string());
+          candidate.push("set-port"  .to_string());
+          candidate.push("set-baud"  .to_string());
+          candidate.push("set-par"   .to_string());
+          candidate.push("set-data"  .to_string());
+          candidate.push("set-stop"  .to_string());
+          candidate.push("set-time"  .to_string());
+          candidate.push("set-flow"  .to_string());
+          candidate.push("set-rts"   .to_string());
+          candidate.push("set-dtr"   .to_string());
+          candidate.push("get-mode"  .to_string());
+          candidate.push("get-ending".to_string());
+          candidate.push("get-rev"   .to_string());
+          candidate.push("get-port"  .to_string());
+          candidate.push("get-baud"  .to_string());
+          candidate.push("get-data"  .to_string());
+          candidate.push("get-par"   .to_string());
+          candidate.push("get-stop"  .to_string());
+          candidate.push("get-time"  .to_string());
+          candidate.push("get-flow"  .to_string());
+          candidate.push("get-in"    .to_string());
+          candidate.push("get-out"   .to_string());
+          candidate.push("get-cts"   .to_string());
+          candidate.push("get-dsr"   .to_string());
+          candidate.push("get-ri"    .to_string());
+          candidate.push("get-cd"    .to_string());
+        },
+
         CommandType::SetMode => {
           candidate.push("ascii".to_string());
           candidate.push("hex"  .to_string());
@@ -724,6 +758,7 @@ fn main() {
       // buffer
       match command {
         // Argument must match
+        | CommandType::Help
         | CommandType::SetMode
         | CommandType::SetEnding
         | CommandType::SetReverse
@@ -908,6 +943,23 @@ fn main() {
         queue!(
           stdout,
           Print(HELP_MESSAGE),
+        ).unwrap();
+      },
+
+      (CommandType::Help, arg) => {
+        let command = CommandType::from_str(arg).unwrap();
+
+        if command == CommandType::None {
+          queue!(
+            stdout,
+            SetForegroundColor(Color::Red),
+          ).unwrap();
+        }
+
+        queue!(
+          stdout,
+          Print(command.get_help()),
+          ResetColor,
         ).unwrap();
       },
 
