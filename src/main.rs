@@ -549,7 +549,7 @@ fn main() {
 
       // candidate
       match command {
-        CommandType::Help => {
+        _ if (fragments.len() == 1) || (command == CommandType::Help) => {
           candidate.push("help"      .to_string());
           candidate.push("clear"     .to_string());
           candidate.push("send"      .to_string());
@@ -648,42 +648,6 @@ fn main() {
         | CommandType::SetDtr => {
           candidate.push("on" .to_string());
           candidate.push("off".to_string());
-        },
-
-        _ if fragments.len() == 1 => {
-          candidate.push("help"      .to_string());
-          candidate.push("clear"     .to_string());
-          candidate.push("send"      .to_string());
-          candidate.push("recv"      .to_string());
-          candidate.push("flush"     .to_string());
-          candidate.push("set-mode"  .to_string());
-          candidate.push("set-ending".to_string());
-          candidate.push("set-rev"   .to_string());
-          candidate.push("set-port"  .to_string());
-          candidate.push("set-baud"  .to_string());
-          candidate.push("set-par"   .to_string());
-          candidate.push("set-data"  .to_string());
-          candidate.push("set-stop"  .to_string());
-          candidate.push("set-time"  .to_string());
-          candidate.push("set-flow"  .to_string());
-          candidate.push("set-rts"   .to_string());
-          candidate.push("set-dtr"   .to_string());
-          candidate.push("get-mode"  .to_string());
-          candidate.push("get-ending".to_string());
-          candidate.push("get-rev"   .to_string());
-          candidate.push("get-port"  .to_string());
-          candidate.push("get-baud"  .to_string());
-          candidate.push("get-data"  .to_string());
-          candidate.push("get-par"   .to_string());
-          candidate.push("get-stop"  .to_string());
-          candidate.push("get-time"  .to_string());
-          candidate.push("get-flow"  .to_string());
-          candidate.push("get-in"    .to_string());
-          candidate.push("get-out"   .to_string());
-          candidate.push("get-cts"   .to_string());
-          candidate.push("get-dsr"   .to_string());
-          candidate.push("get-ri"    .to_string());
-          candidate.push("get-cd"    .to_string());
         },
 
         _ => {},
