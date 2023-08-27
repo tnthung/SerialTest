@@ -77,7 +77,7 @@ const HELP_MESSAGE: &str = "Help:
     flush               : flush serial port
 
     set-mode   <mode>   : set mode
-    set-ending <ending> : set auto ending
+    set-end    <ending> : set auto ending
     set-rev    <state>  : set reverse send
 
     set-port   <name>   : set port
@@ -92,7 +92,7 @@ const HELP_MESSAGE: &str = "Help:
     set-dtr    <state>  : set DTR state
 
     get-mode            : quarry mode
-    get-ending          : quarry auto ending
+    get-end             : quarry auto ending
     get-rev             : quarry reverse send
 
     get-port            : quarry port name
@@ -556,7 +556,7 @@ fn main() {
           candidate.push("recv"      .to_string());
           candidate.push("flush"     .to_string());
           candidate.push("set-mode"  .to_string());
-          candidate.push("set-ending".to_string());
+          candidate.push("set-end"   .to_string());
           candidate.push("set-rev"   .to_string());
           candidate.push("set-port"  .to_string());
           candidate.push("set-baud"  .to_string());
@@ -568,7 +568,7 @@ fn main() {
           candidate.push("set-rts"   .to_string());
           candidate.push("set-dtr"   .to_string());
           candidate.push("get-mode"  .to_string());
-          candidate.push("get-ending".to_string());
+          candidate.push("get-end"   .to_string());
           candidate.push("get-rev"   .to_string());
           candidate.push("get-port"  .to_string());
           candidate.push("get-baud"  .to_string());
@@ -2017,7 +2017,7 @@ fn parse_input(s: Vec<String>, mode: Mode) -> (
     "recv"       => ret.0 = CommandType::Receive    ,
     "flush"      => ret.0 = CommandType::Flush      ,
     "set-mode"   => ret.0 = CommandType::SetMode    ,
-    "set-ending" => ret.0 = CommandType::SetEnding  ,
+    "set-end"    => ret.0 = CommandType::SetEnding  ,
     "set-rev"    => ret.0 = CommandType::SetReverse ,
     "set-port"   => ret.0 = CommandType::SetPort    ,
     "set-baud"   => ret.0 = CommandType::SetBaud    ,
@@ -2029,7 +2029,7 @@ fn parse_input(s: Vec<String>, mode: Mode) -> (
     "set-rts"    => ret.0 = CommandType::SetRts     ,
     "set-dtr"    => ret.0 = CommandType::SetDtr     ,
     "get-mode"   => ret.0 = CommandType::GetMode    ,
-    "get-ending" => ret.0 = CommandType::GetEnding  ,
+    "get-end"    => ret.0 = CommandType::GetEnding  ,
     "get-rev"    => ret.0 = CommandType::GetReverse ,
     "get-port"   => ret.0 = CommandType::GetPort    ,
     "get-baud"   => ret.0 = CommandType::GetBaud    ,

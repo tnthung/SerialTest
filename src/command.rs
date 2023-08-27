@@ -57,7 +57,7 @@ impl std::str::FromStr for CommandType {
       "send"       => Ok(CommandType::Send       ),
       "recv"       => Ok(CommandType::Receive    ),
       "set-mode"   => Ok(CommandType::SetMode    ),
-      "set-ending" => Ok(CommandType::SetEnding  ),
+      "set-end"    => Ok(CommandType::SetEnding  ),
       "set-rev"    => Ok(CommandType::SetReverse ),
       "set-port"   => Ok(CommandType::SetPort    ),
       "set-baud"   => Ok(CommandType::SetBaud    ),
@@ -69,7 +69,7 @@ impl std::str::FromStr for CommandType {
       "set-rts"    => Ok(CommandType::SetRts     ),
       "set-dtr"    => Ok(CommandType::SetDtr     ),
       "get-mode"   => Ok(CommandType::GetMode    ),
-      "get-ending" => Ok(CommandType::GetEnding  ),
+      "get-end"    => Ok(CommandType::GetEnding  ),
       "get-rev"    => Ok(CommandType::GetReverse ),
       "get-port"   => Ok(CommandType::GetPort    ),
       "get-baud"   => Ok(CommandType::GetBaud    ),
@@ -98,7 +98,7 @@ impl std::fmt::Display for CommandType {
       CommandType::Send        => write!(f, "send"      ),
       CommandType::Receive     => write!(f, "recv"      ),
       CommandType::SetMode     => write!(f, "set-mode"  ),
-      CommandType::SetEnding   => write!(f, "set-ending"),
+      CommandType::SetEnding   => write!(f, "set-end"   ),
       CommandType::SetReverse  => write!(f, "set-rev"   ),
       CommandType::SetPort     => write!(f, "set-port"  ),
       CommandType::SetBaud     => write!(f, "set-baud"  ),
@@ -110,7 +110,7 @@ impl std::fmt::Display for CommandType {
       CommandType::SetRts      => write!(f, "set-rts"   ),
       CommandType::SetDtr      => write!(f, "set-dtr"   ),
       CommandType::GetMode     => write!(f, "get-mode"  ),
-      CommandType::GetEnding   => write!(f, "get-ending"),
+      CommandType::GetEnding   => write!(f, "get-end"   ),
       CommandType::GetReverse  => write!(f, "get-rev"   ),
       CommandType::GetPort     => write!(f, "get-port"  ),
       CommandType::GetBaud     => write!(f, "get-baud"  ),
@@ -153,7 +153,7 @@ If no command is specified, print the help information for all commands.
     hex  : Hexadecimal mode.",
 
       CommandType::SetEnding =>
-"set-ending <ending>: Set the ending of the message.
+"set-end: <ending>: Set the ending of the message.
 
   - <ending>: The type of ending.
     none: No ending.
@@ -233,7 +233,7 @@ If no command is specified, print the help information for all commands.
       CommandType::Flush       => "flush: Flush the serial port manually.",
       CommandType::Receive     => "recv: Receive the message from the serial port.",
       CommandType::GetMode     => "get-mode: Get the mode of the message.",
-      CommandType::GetEnding   => "get-ending: Get the ending of the message.",
+      CommandType::GetEnding   => "get-end: Get the ending of the message.",
       CommandType::GetReverse  => "get-rev: Get if message is in reverse order.",
       CommandType::GetPort     => "get-port: Get the serial port.",
       CommandType::GetBaud     => "get-baud: Get the baud rate of the serial port.",
