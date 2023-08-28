@@ -699,7 +699,7 @@ fn main() {
 
           Mode::HEX => {
             for i in buffer {
-              tmp.push_str(format!("{:02X}", i).as_str());
+              tmp.push_str(format!("{:02X} ", i).as_str());
             }
           },
         }
