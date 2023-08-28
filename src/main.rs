@@ -1171,7 +1171,7 @@ fn main() {
         ).unwrap();
       },
 
-      CommandType::Send if argument.len() == 1 => {
+      CommandType::Send if argument.len() == 1 => block!({
         let arg = &argument[0];
 
         // check if message is valid
@@ -1187,9 +1187,9 @@ fn main() {
             Print("Invalid message."),
             ResetColor,
           ).unwrap();
+          break;
         }
 
-        else {
           let mut buffer   = Vec::<u8>::new();
           let mut sent_str = String::new();
 
@@ -1302,8 +1302,7 @@ fn main() {
           ).unwrap();
 
           read_serial(port.try_clone().unwrap());
-        }
-      }
+      }),
 
       CommandType::Receive if argument.len() == 0 =>
         (read_serial)(port.try_clone().unwrap()),
