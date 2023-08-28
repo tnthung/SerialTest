@@ -12,9 +12,15 @@ use std::{
 };
 
 use mode   ::Mode;
+use util   ::block;
 use regex  ::Regex;
 use ending ::Ending;
 use command::CommandType;
+
+use clipboard::{
+  ClipboardContext,
+  ClipboardProvider,
+};
 
 use serialport::{
   self,
@@ -109,7 +115,10 @@ const HELP_MESSAGE: &str = "Help:
     get-cts             : quarry CTS state
     get-dsr             : quarry DSR state
     get-ri              : quarry RI  state
-    get-cd              : quarry CD  state";
+    get-cd              : quarry CD  state
+
+  Tools:
+    sum <type> <message>: Calculate the checksum";
 
 
 
@@ -117,9 +126,10 @@ const HELP_MESSAGE: &str = "Help:
 fn main() {
   let mut stdout = std::io::stdout();
 
-  let re_int     = Regex::new(r"^[1-9][0-9]*$"                                                   ).unwrap();
-  let re_hex     = Regex::new(r"^([0-9A-Fa-f]{2})+$"                                             ).unwrap();
-  let re_ascii   = Regex::new(r"^((\\\\)|(\\[01][0-9A-Fa-f])|(\\20)|(\\7[fF])|([\ -~&&[^\\]]))+$").unwrap();
+  let re_int   = Regex::new(r"^[1-9][0-9]*$"                           ).unwrap();
+  let re_hex   = Regex::new(r"^([0-9A-Fa-f]{2})+$"                     ).unwrap();
+  let re_sum   = Regex::new(r"^(crc16|sum8)(-[cirn]+)?$"               ).unwrap();
+  let re_ascii = Regex::new(r"^(\\\\|\\[0-9A-Fa-f]{2}|[\ -~&&[^\\]])+$").unwrap();
 
 
   // clear screen
@@ -520,291 +530,135 @@ fn main() {
     CandidateState::None,
   ]);
 
+  let command   = RefCell::new(CommandType::None);
+  let fragments = RefCell::new(Vec::<Vec<String>>::new());
 
-  let mut input = input::InputBuilder::new("> ")
-    .preprocessor(|s, _| {
-      let (command, fragments) = parse_input(s.clone(), *mode.borrow());
 
-      let mut processed = Vec::<String>::new();
-      let mut candidate = Vec::<String>::new();
+  // functions need environment
+  let calc_crc16 = |buf: String| -> u16 {
+    let mut buf  = buf;
+    let mut crc  = 0xFFFFu16;
 
-      let mut candidate_states = candidate_states.borrow_mut();
+    let get_lead: fn(&mut String) -> u8;
 
-      // processed
-      match command {
-        CommandType::Send => {
-          processed.extend(fragments[0].clone());
+    if *mode.borrow() == Mode::ASCII {
+      if !re_ascii.is_match(&buf) { return 0; }
+      get_lead = get_lead_byte_ascii;
+    }
 
-          if fragments.len() > 1 {
-            processed.push(" ".to_string());
-            processed.extend(string_to_vec_ascii(
-              fragments[1].concat()));
-          }
-        },
+    else {
+      if !re_hex.is_match(&buf) { return 0; }
+      get_lead = get_lead_byte_hex;
+    }
 
-        _ => {
-          processed = s;
-        },
-      }
+    while buf.len() > 0 {
+      crc ^= get_lead(&mut buf) as u16;
 
-      // candidate
-      match command {
-        _ if (fragments.len() == 1) || (command == CommandType::Help) => {
-          candidate.push("help"      .to_string());
-          candidate.push("clear"     .to_string());
-          candidate.push("send"      .to_string());
-          candidate.push("recv"      .to_string());
-          candidate.push("flush"     .to_string());
-          candidate.push("set-mode"  .to_string());
-          candidate.push("set-end"   .to_string());
-          candidate.push("set-rev"   .to_string());
-          candidate.push("set-port"  .to_string());
-          candidate.push("set-baud"  .to_string());
-          candidate.push("set-par"   .to_string());
-          candidate.push("set-data"  .to_string());
-          candidate.push("set-stop"  .to_string());
-          candidate.push("set-time"  .to_string());
-          candidate.push("set-flow"  .to_string());
-          candidate.push("set-rts"   .to_string());
-          candidate.push("set-dtr"   .to_string());
-          candidate.push("get-mode"  .to_string());
-          candidate.push("get-end"   .to_string());
-          candidate.push("get-rev"   .to_string());
-          candidate.push("get-port"  .to_string());
-          candidate.push("get-baud"  .to_string());
-          candidate.push("get-data"  .to_string());
-          candidate.push("get-par"   .to_string());
-          candidate.push("get-stop"  .to_string());
-          candidate.push("get-time"  .to_string());
-          candidate.push("get-flow"  .to_string());
-          candidate.push("get-in"    .to_string());
-          candidate.push("get-out"   .to_string());
-          candidate.push("get-cts"   .to_string());
-          candidate.push("get-dsr"   .to_string());
-          candidate.push("get-ri"    .to_string());
-          candidate.push("get-cd"    .to_string());
-        },
+      for _ in 0..8 {
+        let carry = crc & 0x0001;
 
-        CommandType::SetMode => {
-          candidate.push("ascii".to_string());
-          candidate.push("hex"  .to_string());
-        },
+        crc >>= 1;
 
-        CommandType::SetEnding => {
-          candidate.push("none".to_string());
-          candidate.push("cr"  .to_string());
-          candidate.push("lf"  .to_string());
-          candidate.push("crlf".to_string());
-        },
-
-        CommandType::SetPort => {
-          let ports = available_ports().unwrap();
-
-          candidate.extend(ports.iter()
-            .map(|p| p.port_name.clone()));
-        },
-
-        CommandType::SetBaud => {
-          candidate.push("9600"  .to_string());
-          candidate.push("19200" .to_string());
-          candidate.push("38400" .to_string());
-          candidate.push("57600" .to_string());
-          candidate.push("115200".to_string());
-        },
-
-        CommandType::SetParity => {
-          candidate.push("none".to_string());
-          candidate.push("odd" .to_string());
-          candidate.push("even".to_string());
-        },
-
-        CommandType::SetDataBits => {
-          candidate.push("5".to_string());
-          candidate.push("6".to_string());
-          candidate.push("7".to_string());
-          candidate.push("8".to_string());
-        },
-
-        CommandType::SetStopBits => {
-          candidate.push("1".to_string());
-          candidate.push("2".to_string());
-        },
-
-        CommandType::SetTimeout => {
-          candidate.push("100" .to_string());
-          candidate.push("500" .to_string());
-          candidate.push("1000".to_string());
-          candidate.push("2000".to_string());
-        },
-
-        CommandType::SetFlow => {
-          candidate.push("none"    .to_string());
-          candidate.push("software".to_string());
-          candidate.push("hardware".to_string());
-        },
-
-        | CommandType::SetReverse
-        | CommandType::SetRts
-        | CommandType::SetDtr => {
-          candidate.push("on" .to_string());
-          candidate.push("off".to_string());
-        },
-
-        _ => {},
-      }
-
-      // last part
-      let last_index = fragments.len() - 1;
-      let last_part  = fragments[last_index].concat();
-
-      // check if last part matches any candidate
-      let match_any = candidate.iter().any(|s| s == &last_part);
-
-      // filter candidate
-      candidate.retain(|s|
-        s.starts_with(&last_part) &&
-        s.len() > last_part.len());
-
-      // set candidate state
-      candidate_states[last_index] =
-             if match_any           { CandidateState::Match }
-        else if candidate.len() > 0 { CandidateState::Has   }
-        else                        { CandidateState::None  };
-
-      let prefix_len = last_part.len();
-
-      input::Processed {
-        buffer   : processed,
-        candidate: candidate.iter().map(|s|
-          s[prefix_len..].to_string()).collect(),
-      }
-    })
-    .renderer(|s, mut c| {
-      let (command, fragments) = parse_input(s.clone(), *mode.borrow());
-
-      let mut column    = 0usize;
-      let mut processed = String::new();
-
-      let candidate_states = candidate_states.borrow();
-
-      // function for incrementing column
-      let mut incr_column = |arr: &mut String, buf: Vec<String>| {
-        for i in buf {
-          if c != 0 {
-            c      -= 1;
-            column += i.len();
-          }
-
-          arr.push_str(i.as_str());
+        if carry != 0 {
+          crc ^= 0xA001;
         }
-      };
-
-      // command color
-      processed.push_str(&SetForegroundColor(
-        match candidate_states[0] {
-          CandidateState::Match => Color::Blue ,
-          CandidateState::Has   => Color::White,
-          _                     => Color::Red  ,
-        }).to_string());
-
-      // add command
-      incr_column(&mut processed, fragments[0].clone());
-      processed.push_str(&ResetColor.to_string());
-
-      // return if no argument
-      if fragments.len() == 1 {
-        return (processed, column);
       }
+    }
 
-      // add space
-      incr_column(&mut processed, vec![" ".to_string()]);
+    crc
+  };
 
-      // buffer
-      match command {
-        // Argument must match
-        | CommandType::Help
-        | CommandType::SetMode
-        | CommandType::SetEnding
-        | CommandType::SetReverse
-        | CommandType::SetPort
-        | CommandType::SetDataBits
-        | CommandType::SetParity
-        | CommandType::SetStopBits
-        | CommandType::SetFlow
-        | CommandType::SetRts
-        | CommandType::SetDtr  => {
-          let arg = fragments[1].concat();
+  let calc_sum8 = |buf: String| -> u8 {
+    let mut buf = buf;
+    let mut sum = 0u8;
 
-          processed.push_str(&SetForegroundColor(
-            match candidate_states[1] {
-              CandidateState::Match => Color::Green,
-              CandidateState::Has   => Color::White,
-              _                     => Color::Red,
-            }).to_string());
+    let get_lead: fn(&mut String) -> u8;
 
-          incr_column(&mut processed, vec![arg]);
-        },
+    if *mode.borrow() == Mode::ASCII {
+      if !re_ascii.is_match(&buf) { return 0; }
+      get_lead = get_lead_byte_ascii;
+    }
 
-        // Argument can match
-        | CommandType::SetBaud
-        | CommandType::SetTimeout => {
-          let arg = fragments[1].concat();
+    else {
+      if !re_hex.is_match(&buf) { return 0; }
+      get_lead = get_lead_byte_hex;
+    }
 
-          processed.push_str(&SetForegroundColor(
-            if re_int.is_match(&arg) { Color::White }
-            else                     { Color::Red   }
-          ).to_string());
+    while buf.len() > 0 {
+      sum = sum.wrapping_add(get_lead(&mut buf));
+    }
 
-          incr_column(&mut processed, vec![arg]);
-        },
+    sum
+  };
 
-        // Argument in special format
-        CommandType::Send => {
-          let raw_arg = fragments[1].clone();
-          let     arg = raw_arg.concat();
+  let calc_checksum = |sum_type: String, buf: String| -> String {
+    let _sum_type: String;
+    let _sum_post: String;
 
-          match *mode.borrow() {
-            Mode::ASCII => {
-              processed.push_str(&SetForegroundColor(
-                if re_ascii.is_match(&arg) { Color::White }
-                else                       { Color::Red   }
-              ).to_string());
+    if sum_type.find(|c| c == '-').is_some() {
+      let mut split = sum_type.split('-');
 
-              incr_column(&mut processed,
-                raw_arg.iter().map(|i|
-                  get_printable_ascii(i.clone())
-                ).collect());
-            },
+      _sum_type = split.next().unwrap().to_string();
+      _sum_post = split.next().unwrap().to_string();
+    }
 
-            Mode::HEX => {
-              processed.push_str(&SetForegroundColor(
-                if re_hex.is_match(&arg) { Color::White }
-                else                     { Color::Red   }
-              ).to_string());
+    else {
+      _sum_type = sum_type;
+      _sum_post = String::new();
+    }
 
-              incr_column(&mut processed, vec![arg]);
-            },
-          }
-        },
+    let mut checksum = match _sum_type.as_str() {
+      "crc16" => calc_crc16(buf),
+      "sum8"  => calc_sum8 (buf) as u16,
+      _       => return String::new(),
+    };
 
-        // No argument
-        _ => {
-          processed.push_str(&SetForegroundColor(Color::Red).to_string());
-          incr_column(&mut processed, fragments[1].clone());
-        },
-      }
+    if _sum_post.find(|c| c == 'i').is_some() {
+      checksum = !checksum;
+    }
 
-      (processed, column)
-    })
-    .build_with_final(|s| {
-      let (command_str, buffer_str) = s.split_at(s.find(' ').unwrap_or(s.len()));
-      (
-        CommandType::from_str(command_str).unwrap(),
-        if buffer_str.len() > 0 { buffer_str[1..].to_string() }
-        else                    { ""             .to_string() }
-      )
-    });
+    if _sum_post.find(|c| c == 'n').is_some() {
+      checksum = 0u16.wrapping_sub(checksum);
+    }
 
+    if _sum_post.find(|c| c == 'r').is_some() && _sum_type == "crc16" {
+      checksum = checksum.rotate_right(8);
+    }
+
+    let checksum = match _sum_type.as_str() {
+      "crc16" => format!("{:04X}", checksum),
+      "sum8"  => format!("{:02X}", checksum as u8),
+      _       => String::new(),
+    };
+
+    match *mode.borrow() {
+      Mode::HEX if _sum_post.find(|c| c == 'c').is_some() => {
+        checksum.chars().map(|c|
+          format!("{:02X} ", c as u8)
+        ).collect()
+      },
+
+      Mode::HEX => {
+        checksum
+      },
+
+      Mode::ASCII if _sum_post.find(|c| c == 'c').is_some() => {
+        checksum
+      },
+
+      Mode::ASCII => {
+        let mut sum = checksum;
+        let mut ret = String::new();
+
+        while sum.len() > 0 {
+          let tmp = sum.drain(..2).collect::<String>();
+          ret.push_str(&format!("\\{}", tmp));
+        }
+
+        ret
+      },
+    }
+  };
 
   let read_serial = |mut port: Box<dyn SerialPort>| {
     let mut stdout = std::io::stdout();
@@ -878,6 +732,372 @@ fn main() {
   };
 
 
+  let mut input = input::InputBuilder::new("> ")
+    .preprocessor(|s, _| {
+      let mut command   = command  .borrow_mut();
+      let mut fragments = fragments.borrow_mut();
+
+      (*command, *fragments) = parse_input(s.clone(), *mode.borrow());
+
+      let command   = *command;
+      let fragments =  fragments;
+
+      let mut processed = Vec::<String>::new();
+      let mut candidate = Vec::<String>::new();
+
+      let mut candidate_states = candidate_states.borrow_mut();
+
+      let mut need_filter = true;
+
+      // processed
+      match command {
+        CommandType::Send => {
+          processed.extend(fragments[0].clone());
+
+          if fragments.len() > 1 {
+            processed.push(" ".to_string());
+            processed.extend(string_to_vec_ascii(
+              fragments[1].concat()));
+          }
+        },
+
+        CommandType::Checksum => {
+          processed.extend(fragments[0].clone());
+
+          if fragments.len() > 1 {
+            processed.push(" ".to_string());
+            processed.extend(fragments[1].clone());
+          }
+
+          if fragments.len() > 2 {
+            processed.push(" ".to_string());
+            processed.extend(string_to_vec_ascii(
+              fragments[2].concat()));
+          }
+        },
+
+        _ => {
+          processed = s;
+        },
+      }
+
+      // candidate
+      match command {
+        _ if (fragments.len() == 1) || (command == CommandType::Help) => {
+          candidate.push("help"      .to_string());
+          candidate.push("clear"     .to_string());
+          candidate.push("send"      .to_string());
+          candidate.push("recv"      .to_string());
+          candidate.push("flush"     .to_string());
+          candidate.push("set-mode"  .to_string());
+          candidate.push("set-end"   .to_string());
+          candidate.push("set-rev"   .to_string());
+          candidate.push("set-port"  .to_string());
+          candidate.push("set-baud"  .to_string());
+          candidate.push("set-par"   .to_string());
+          candidate.push("set-data"  .to_string());
+          candidate.push("set-stop"  .to_string());
+          candidate.push("set-time"  .to_string());
+          candidate.push("set-flow"  .to_string());
+          candidate.push("set-rts"   .to_string());
+          candidate.push("set-dtr"   .to_string());
+          candidate.push("get-mode"  .to_string());
+          candidate.push("get-end"   .to_string());
+          candidate.push("get-rev"   .to_string());
+          candidate.push("get-port"  .to_string());
+          candidate.push("get-baud"  .to_string());
+          candidate.push("get-data"  .to_string());
+          candidate.push("get-par"   .to_string());
+          candidate.push("get-stop"  .to_string());
+          candidate.push("get-time"  .to_string());
+          candidate.push("get-flow"  .to_string());
+          candidate.push("get-in"    .to_string());
+          candidate.push("get-out"   .to_string());
+          candidate.push("get-cts"   .to_string());
+          candidate.push("get-dsr"   .to_string());
+          candidate.push("get-ri"    .to_string());
+          candidate.push("get-cd"    .to_string());
+          candidate.push("sum"       .to_string());
+        },
+
+        CommandType::SetMode => {
+          candidate.push("ascii".to_string());
+          candidate.push("hex"  .to_string());
+        },
+
+        CommandType::SetEnding => {
+          candidate.push("none".to_string());
+          candidate.push("cr"  .to_string());
+          candidate.push("lf"  .to_string());
+          candidate.push("crlf".to_string());
+        },
+
+        CommandType::SetPort => {
+          let ports = available_ports().unwrap();
+
+          candidate.extend(ports.iter()
+            .map(|p| p.port_name.clone()));
+        },
+
+        CommandType::SetBaud => {
+          candidate.push("9600"  .to_string());
+          candidate.push("19200" .to_string());
+          candidate.push("38400" .to_string());
+          candidate.push("57600" .to_string());
+          candidate.push("115200".to_string());
+        },
+
+        CommandType::SetParity => {
+          candidate.push("none".to_string());
+          candidate.push("odd" .to_string());
+          candidate.push("even".to_string());
+        },
+
+        CommandType::SetDataBits => {
+          candidate.push("5".to_string());
+          candidate.push("6".to_string());
+          candidate.push("7".to_string());
+          candidate.push("8".to_string());
+        },
+
+        CommandType::SetStopBits => {
+          candidate.push("1".to_string());
+          candidate.push("2".to_string());
+        },
+
+        CommandType::SetTimeout => {
+          candidate.push("100" .to_string());
+          candidate.push("500" .to_string());
+          candidate.push("1000".to_string());
+          candidate.push("2000".to_string());
+        },
+
+        CommandType::SetFlow => {
+          candidate.push("none"    .to_string());
+          candidate.push("software".to_string());
+          candidate.push("hardware".to_string());
+        },
+
+        | CommandType::SetReverse
+        | CommandType::SetRts
+        | CommandType::SetDtr => {
+          candidate.push("on" .to_string());
+          candidate.push("off".to_string());
+        },
+
+        CommandType::Checksum if fragments.len() == 2 => {
+          candidate.push("crc16".to_string());
+          candidate.push("sum8" .to_string());
+        },
+
+        CommandType::Checksum if fragments.len() == 3 => {
+          candidate.push(calc_checksum(
+            fragments[1].concat(),
+            fragments[2].concat()));
+
+          need_filter = false;
+        },
+
+        _ => {},
+      }
+
+      // last part
+      let last_index = fragments.len() - 1;
+      let last_part  = fragments[last_index].concat();
+
+      // check if last part matches any candidate
+      let match_any = candidate.iter().any(|s| s == &last_part);
+
+      // filter candidate
+      if need_filter {
+        candidate.retain(|s|
+          s.starts_with(&last_part) &&
+          s.len() > last_part.len());
+
+        // set candidate state
+        candidate_states[last_index] =
+               if match_any           { CandidateState::Match }
+          else if candidate.len() > 0 { CandidateState::Has   }
+          else                        { CandidateState::None  };
+
+        let prefix_len = last_part.len();
+
+        candidate = candidate.iter().map(|s|
+          s[prefix_len..].to_string()).collect();
+      }
+
+      input::Processed {
+        buffer: processed,
+        candidate,
+      }
+    })
+    .renderer(|_, mut c| {
+      let command   = *command  .borrow();
+      let fragments =  fragments.borrow();
+
+      let mut column    = 0usize;
+      let mut processed = String::new();
+
+      let candidate_states = candidate_states.borrow();
+
+      // function for incrementing column
+      let mut incr_column = |arr: &mut String, buf: Vec<String>| {
+        for i in buf {
+          if c != 0 {
+            c      -= 1;
+            column += i.len();
+          }
+
+          arr.push_str(i.as_str());
+        }
+      };
+
+      // command color
+      processed.push_str(&SetForegroundColor(
+        match candidate_states[0] {
+          CandidateState::Match => Color::Blue ,
+          CandidateState::Has   => Color::White,
+          _                     => Color::Red  ,
+        }).to_string());
+
+      // add command
+      incr_column(&mut processed, fragments[0].clone());
+      processed.push_str(&ResetColor.to_string());
+
+      // return if no argument
+      if fragments.len() == 1 {
+        return (processed, column);
+      }
+
+      // add space
+      incr_column(&mut processed, vec![" ".to_string()]);
+
+      // buffer
+      match command {
+        // Argument must match
+        | CommandType::Help
+        | CommandType::SetMode
+        | CommandType::SetEnding
+        | CommandType::SetReverse
+        | CommandType::SetPort
+        | CommandType::SetDataBits
+        | CommandType::SetParity
+        | CommandType::SetStopBits
+        | CommandType::SetFlow
+        | CommandType::SetRts
+        | CommandType::SetDtr  => {
+          processed.push_str(&SetForegroundColor(
+            match candidate_states[1] {
+              CandidateState::Match => Color::Green,
+              CandidateState::Has   => Color::White,
+              _                     => Color::Red,
+            }).to_string());
+
+          incr_column(&mut processed, fragments[1].clone());
+        },
+
+        // Argument can match
+        | CommandType::SetBaud
+        | CommandType::SetTimeout => {
+          let arg = fragments[1].concat();
+
+          processed.push_str(&SetForegroundColor(
+            if re_int.is_match(&arg) { Color::White }
+            else                     { Color::Red   }
+          ).to_string());
+
+          incr_column(&mut processed, fragments[1].clone());
+        },
+
+        // Argument in special format
+        CommandType::Send => {
+          let raw_arg = fragments[1].clone();
+          let     arg = raw_arg.concat();
+
+          match *mode.borrow() {
+            Mode::ASCII => {
+              processed.push_str(&SetForegroundColor(
+                if re_ascii.is_match(&arg) { Color::White }
+                else                       { Color::Red   }
+              ).to_string());
+
+              incr_column(&mut processed,
+                raw_arg.iter().map(|i|
+                  get_printable_ascii(i.clone())
+                ).collect());
+            },
+
+            Mode::HEX => {
+              processed.push_str(&SetForegroundColor(
+                if re_hex.is_match(&arg) { Color::White }
+                else                     { Color::Red   }
+              ).to_string());
+
+              incr_column(&mut processed, raw_arg);
+            },
+          }
+        },
+
+        // Special format, Special format
+        CommandType::Checksum => {
+          { // Exact
+            processed.push_str(&SetForegroundColor(
+              if re_sum.is_match(&fragments[1].concat())         { Color::Green }
+              else if candidate_states[1] == CandidateState::Has { Color::White }
+              else                                               { Color::Red   }
+            ).to_string());
+
+            incr_column(&mut processed, fragments[1].clone());
+          }
+
+          if fragments.len() == 2 {
+            return (processed, column);
+          }
+
+          // add space
+          incr_column(&mut processed, vec![" ".to_string()]);
+
+          { // Special format
+            let raw_arg = fragments[2].clone();
+            let     arg = raw_arg.concat();
+
+            match *mode.borrow() {
+              Mode::ASCII => {
+                processed.push_str(&SetForegroundColor(
+                  if re_ascii.is_match(&arg) { Color::White }
+                  else                       { Color::Red   }
+                ).to_string());
+
+                incr_column(&mut processed,
+                  raw_arg.iter().map(|i|
+                    get_printable_ascii(i.clone())
+                  ).collect());
+              },
+
+              Mode::HEX => {
+                processed.push_str(&SetForegroundColor(
+                  if re_hex.is_match(&arg) { Color::White }
+                  else                     { Color::Red   }
+                ).to_string());
+
+                incr_column(&mut processed, raw_arg);
+              },
+            }
+          }
+        },
+
+        // No argument
+        _ => {
+          processed.push_str(&SetForegroundColor(Color::Red).to_string());
+          incr_column(&mut processed, fragments[1].clone());
+        },
+      }
+
+      (processed, column)
+    })
+    .build();
+
+
   loop {
     let prompt_result = input.prompt();
 
@@ -900,18 +1120,34 @@ fn main() {
 
     (*ctrl_c.borrow_mut()) = false;
 
-    let (command, argument) = prompt_result.unwrap();
+    let command   = *command  .borrow();
+    let fragments =  fragments.borrow();
 
-    match (command, argument.to_lowercase().as_str()) {
-      (CommandType::Help, "") => {
+    let argument = fragments.iter()
+      .skip(1)
+      .map(|s| s.concat())
+      .collect::<Vec<String>>();
+
+    match command {
+      CommandType::None => {
+        queue!(
+          stdout,
+          SetForegroundColor(Color::Red),
+          Print("Invalid command.\n"),
+          ResetColor,
+        ).unwrap();
+      },
+
+      CommandType::Help if argument.len() == 0 => {
         queue!(
           stdout,
           Print(HELP_MESSAGE),
         ).unwrap();
       },
 
-      (CommandType::Help, arg) => {
-        let command = CommandType::from_str(arg).unwrap();
+      CommandType::Help if argument.len() == 1 => {
+        let command = CommandType::from_str(
+          &argument[0].to_lowercase()).unwrap();
 
         if command == CommandType::None {
           queue!(
@@ -927,7 +1163,7 @@ fn main() {
         ).unwrap();
       },
 
-      (CommandType::Clear, "") => {
+      CommandType::Clear if argument.len() == 0 => {
         queue!(
           stdout,
           Clear(ClearType::All),
@@ -935,8 +1171,8 @@ fn main() {
         ).unwrap();
       },
 
-      (CommandType::Send, _) => {
-        let arg = argument.as_str();
+      CommandType::Send if argument.len() == 1 => {
+        let arg = &argument[0];
 
         // check if message is valid
         if {
@@ -994,15 +1230,11 @@ fn main() {
             },
 
             Mode::HEX => {
-              let mut tmp = arg;
+              let mut tmp = arg.to_string();
 
               while tmp.len() > 0 {
-                if let Ok(v) = u8::from_str_radix(&tmp[..2], 16) {
-                  buffer.push(v);
-                  tmp = &tmp[2..];
-
-                  sent_str.push_str(format!("{:02X} ", v).as_str());
-                }
+                sent_str.push_str(format!("{:02X} ",
+                  get_lead_byte_hex(&mut tmp)).as_str());
               }
             },
           }
@@ -1071,12 +1303,12 @@ fn main() {
 
           read_serial(port.try_clone().unwrap());
         }
-      },
+      }
 
-      (CommandType::Receive, "") =>
+      CommandType::Receive if argument.len() == 0 =>
         (read_serial)(port.try_clone().unwrap()),
 
-      (CommandType::Flush, "") =>
+      CommandType::Flush if argument.len() == 0 =>
         match port.flush() {
           Ok(_) => {
             queue!(
@@ -1095,8 +1327,237 @@ fn main() {
           },
         },
 
-      (CommandType::SetMode, arg) =>
-        match arg.to_lowercase().as_str() {
+      CommandType::GetMode if argument.len() == 0 =>
+        queue!(
+          stdout,
+          Print("Mode: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{:?}", mode.borrow())),
+          ResetColor,
+        ).unwrap(),
+
+      CommandType::GetEnding if argument.len() == 0 =>
+        queue!(
+          stdout,
+          Print("Ending: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{:?}", ending.borrow())),
+          ResetColor,
+        ).unwrap(),
+
+      CommandType::GetReverse if argument.len() == 0 =>
+        queue!(
+          stdout,
+          Print("Reverse: "),
+          SetForegroundColor(Color::Green),
+          Print(
+            if *reverse.borrow() { "On"  }
+            else                 { "Off" }
+          ),
+          ResetColor,
+        ).unwrap(),
+
+      CommandType::GetPort if argument.len() == 0 =>
+        queue!(
+          stdout,
+          Print("Port: "),
+          SetForegroundColor(Color::Green),
+          Print(port.name().unwrap()),
+          ResetColor,
+        ).unwrap(),
+
+      CommandType::GetBaud if argument.len() == 0 =>
+        queue!(
+          stdout,
+          Print("Baud rate: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{}", port.baud_rate().unwrap())),
+          ResetColor,
+        ).unwrap(),
+
+      CommandType::GetDataBits if argument.len() == 0 =>
+        queue!(
+          stdout,
+          Print("Data bits: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{}", port.data_bits().unwrap())),
+          ResetColor,
+        ).unwrap(),
+
+      CommandType::GetParity if argument.len() == 0 =>
+        queue!(
+          stdout,
+          Print("Parity: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{:?}", port.parity().unwrap())),
+          ResetColor,
+        ).unwrap(),
+
+      CommandType::GetStopBits if argument.len() == 0 =>
+        queue!(
+          stdout,
+          Print("Stop bits: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{:?}", port.stop_bits().unwrap())),
+          ResetColor,
+        ).unwrap(),
+
+      CommandType::GetTimeout if argument.len() == 0 =>
+        queue!(
+          stdout,
+          Print("Timeout: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{} ms", port.timeout().as_millis())),
+          ResetColor,
+        ).unwrap(),
+
+      CommandType::GetFlow if argument.len() == 0 =>
+        queue!(
+          stdout,
+          Print("Flow control: "),
+          SetForegroundColor(Color::Green),
+          Print(format!("{:?}", port.flow_control().unwrap())),
+          ResetColor,
+        ).unwrap(),
+
+      CommandType::GetInQue if argument.len() == 0 =>
+        match port.bytes_to_read() {
+          Ok(count) => {
+            queue!(
+              stdout,
+              Print("In: "),
+              SetForegroundColor(Color::Green),
+              Print(format!("{:4} bytes", count)),
+              ResetColor,
+            ).unwrap();
+          },
+
+          Err(_) => {
+            queue!(
+              stdout,
+              SetForegroundColor(Color::Red),
+              Print("Failed to get In bytes."),
+              ResetColor,
+            ).unwrap();
+          },
+        },
+
+      CommandType::GetOutQue if argument.len() == 0 =>
+        match port.bytes_to_write() {
+          Ok(count) => {
+            queue!(
+              stdout,
+              Print("Out: "),
+              SetForegroundColor(Color::Green),
+              Print(format!("{:4} bytes", count)),
+              ResetColor,
+            ).unwrap();
+          },
+
+          Err(_) => {
+            queue!(
+              stdout,
+              SetForegroundColor(Color::Red),
+              Print("Failed to get Out bytes."),
+              ResetColor,
+            ).unwrap();
+          },
+        },
+
+      CommandType::GetCts if argument.len() == 0 =>
+        match port.read_clear_to_send() {
+          Ok(state) => {
+            queue!(
+              stdout,
+              Print("CTS: "),
+              Print(
+                if state { "On" }
+                else     { "Off" }
+              ),
+            ).unwrap();
+          },
+
+          Err(_) => {
+            queue!(
+              stdout,
+              SetForegroundColor(Color::Red),
+              Print("Failed to get CTS state."),
+              ResetColor,
+            ).unwrap();
+          },
+        },
+
+      CommandType::GetDsr if argument.len() == 0 =>
+        match port.read_data_set_ready() {
+          Ok(state) => {
+            queue!(
+              stdout,
+              Print("DSR: "),
+              Print(
+                if state { "On" }
+                else     { "Off" }
+              ),
+            ).unwrap();
+          },
+
+          Err(_) => {
+            queue!(
+              stdout,
+              SetForegroundColor(Color::Red),
+              Print("Failed to get DSR state."),
+              ResetColor,
+            ).unwrap();
+          },
+        },
+
+      CommandType::GetRi if argument.len() == 0 =>
+        match port.read_ring_indicator() {
+          Ok(state) => {
+            queue!(
+              stdout,
+              Print("RI: "),
+              Print(
+                if state { "On" }
+                else     { "Off" }
+              ),
+            ).unwrap();
+          },
+
+          Err(_) => {
+            queue!(
+              stdout,
+              SetForegroundColor(Color::Red),
+              Print("Failed to get RI state."),
+              ResetColor,
+            ).unwrap();
+          },
+        },
+
+      CommandType::GetCd if argument.len() == 0 =>
+        match port.read_carrier_detect() {
+          Ok(state) => {
+            queue!(
+              stdout,
+              Print("CD: "),
+              Print(
+                if state { "On" }
+                else     { "Off" }
+              ),
+            ).unwrap();
+          },
+
+          Err(_) => {
+            queue!(
+              stdout,
+              SetForegroundColor(Color::Red),
+              Print("Failed to get CD state."),
+              ResetColor,
+            ).unwrap();
+          },
+        },
+
+      CommandType::SetMode if argument.len() == 1 =>
+        match argument[0].to_lowercase().as_str() {
           "ascii" => {
             *mode.borrow_mut() = Mode::ASCII;
 
@@ -1131,8 +1592,8 @@ fn main() {
           },
         },
 
-      (CommandType::SetEnding, arg) =>
-        match arg.to_lowercase().as_str() {
+      CommandType::SetEnding if argument.len() == 1 =>
+        match argument[0].to_lowercase().as_str() {
           "none" => {
             *ending.borrow_mut() = Ending::None;
 
@@ -1191,8 +1652,8 @@ fn main() {
           },
         },
 
-      (CommandType::SetReverse, arg) =>
-        match arg.to_lowercase().as_str() {
+      CommandType::SetReverse if argument.len() == 1 =>
+        match argument[0].to_lowercase().as_str() {
           "on" => {
             *(reverse.borrow_mut()) = true;
 
@@ -1227,7 +1688,9 @@ fn main() {
           },
         }
 
-      (CommandType::SetPort, _) =>
+      CommandType::SetPort if argument.len() == 1 => {
+        let argument = argument[0].clone();
+
         if let Some(_) = available_ports()
           .unwrap()
           .iter()
@@ -1273,8 +1736,11 @@ fn main() {
             ResetColor,
           ).unwrap();
         }
+      },
 
-      (CommandType::SetBaud, arg) =>
+      CommandType::SetBaud if argument.len() == 1 => {
+        let arg = argument[0].clone();
+
         match {
           if let Ok(rate) = u32::from_str(&arg) {
             port.set_baud_rate(rate)
@@ -1314,11 +1780,14 @@ fn main() {
               ResetColor,
             ).unwrap();
           },
-        },
+        }
+      },
 
-      (CommandType::SetDataBits, arg) =>
+      CommandType::SetDataBits if argument.len() == 1 => {
+        let arg = argument[0].clone();
+
         match {
-          match arg {
+          match arg.as_str() {
             "5" => port.set_data_bits(DataBits::Five ),
             "6" => port.set_data_bits(DataBits::Six  ),
             "7" => port.set_data_bits(DataBits::Seven),
@@ -1357,9 +1826,12 @@ fn main() {
               ResetColor,
             ).unwrap();
           },
-        },
+        }
+      },
 
-      (CommandType::SetParity, arg) =>
+      CommandType::SetParity if argument.len() == 1 => {
+        let arg = argument[0].clone();
+
         match {
           match arg.to_lowercase().as_str() {
             "none" => port.set_parity(Parity::None),
@@ -1399,11 +1871,14 @@ fn main() {
               ResetColor,
             ).unwrap();
           },
-        },
+        }
+      },
 
-      (CommandType::SetStopBits, arg) =>
+      CommandType::SetStopBits if argument.len() == 1 => {
+        let arg = argument[0].clone();
+
         match {
-          match arg {
+          match arg.as_str() {
             "1" => port.set_stop_bits(StopBits::One),
             "2" => port.set_stop_bits(StopBits::Two),
 
@@ -1440,9 +1915,12 @@ fn main() {
               ResetColor,
             ).unwrap();
           },
-        },
+        }
+      },
 
-      (CommandType::SetTimeout, arg) =>
+      CommandType::SetTimeout if argument.len() == 1 =>{
+        let arg = argument[0].clone();
+
         match {
           if let Ok(time) = u64::from_str(&arg) {
             port.set_timeout(std::time::Duration::from_millis(time))
@@ -1482,9 +1960,12 @@ fn main() {
               ResetColor,
             ).unwrap();
           },
-        },
+        }
+      },
 
-      (CommandType::SetFlow, arg) =>
+      CommandType::SetFlow if argument.len() == 1 => {
+        let arg = argument[0].clone();
+
         match {
           match arg.to_lowercase().as_str() {
             "none"     => port.set_flow_control(FlowControl::None    ),
@@ -1524,9 +2005,12 @@ fn main() {
               ResetColor,
             ).unwrap();
           },
-        },
+        }
+      },
 
-      (CommandType::SetRts, arg) =>
+      CommandType::SetRts if argument.len() == 1 => {
+        let arg = argument[0].clone();
+
         match {
           match arg.to_lowercase().as_str() {
             "on"  => port.write_request_to_send(true ),
@@ -1565,9 +2049,12 @@ fn main() {
               ResetColor,
             ).unwrap();
           },
-        },
+        }
+      },
 
-      (CommandType::SetDtr, arg) =>
+      CommandType::SetDtr if argument.len() == 1 => {
+        let arg = argument[0].clone();
+
         match {
           match arg.to_lowercase().as_str() {
             "on"  => port.write_data_terminal_ready(true ),
@@ -1606,261 +2093,70 @@ fn main() {
               ResetColor,
             ).unwrap();
           },
-        },
+        }
+      },
 
-      (CommandType::GetMode, "") => {
+      CommandType::Checksum if argument.len() == 2 => block!({
+        let arg1 = argument[0].clone();
+        let arg2 = argument[1].clone();
+
+        // check if message is valid
+        if {
+          match *mode.borrow() {
+            Mode::ASCII => !re_ascii.is_match(&arg2),
+            Mode::HEX   => !re_hex  .is_match(&arg2),
+          }
+        } {
+          queue!(
+            stdout,
+            SetForegroundColor(Color::Red),
+            Print("Invalid message."),
+            ResetColor,
+          ).unwrap();
+          break;
+        }
+
+        // get the checksum
+        let checksum = calc_checksum(
+          arg1.clone(), arg2.clone());
+
+        // check if checksum exists
+        if checksum == "" {
+          queue!(
+            stdout,
+            SetForegroundColor(Color::Red),
+            Print("Failed to calculate checksum."),
+            ResetColor,
+          ).unwrap();
+          break;
+        }
+
+        // write into clipboard
+        let mut clipboard = ClipboardContext::new().unwrap();
+        clipboard.set_contents(format!("{}{}", arg2, checksum)).unwrap();
+
+        // print message
         queue!(
           stdout,
-          Print("Mode: "),
+          Print("Saved \""),
           SetForegroundColor(Color::Green),
-          Print(format!("{:?}", mode.borrow())),
+          Print(format!("{}{}",
+            match *mode.borrow() {
+              Mode::HEX   => fragments[2].clone().concat(),
+              Mode::ASCII => fragments[2].clone().iter().map(|s|
+                get_printable_ascii(s.clone())).collect::<String>(),
+            }, checksum)),
+          ResetColor,
+          Print("\" to clipboard."),
           ResetColor,
         ).unwrap();
-      },
-
-      (CommandType::GetEnding, "") => {
-        queue!(
-          stdout,
-          Print("Ending: "),
-          SetForegroundColor(Color::Green),
-          Print(format!("{:?}", ending.borrow())),
-          ResetColor,
-        ).unwrap();
-      },
-
-      (CommandType::GetReverse, "") => {
-        queue!(
-          stdout,
-          Print("Reverse: "),
-          SetForegroundColor(Color::Green),
-          Print(
-            if *reverse.borrow() { "On"  }
-            else                 { "Off" }
-          ),
-          ResetColor,
-        ).unwrap();
-      },
-
-      (CommandType::GetPort, "") => {
-        queue!(
-          stdout,
-          Print("Port: "),
-          SetForegroundColor(Color::Green),
-          Print(port.name().unwrap()),
-          ResetColor,
-        ).unwrap();
-      },
-
-      (CommandType::GetBaud, "") => {
-        queue!(
-          stdout,
-          Print("Baud rate: "),
-          SetForegroundColor(Color::Green),
-          Print(format!("{}", port.baud_rate().unwrap())),
-          ResetColor,
-        ).unwrap();
-      },
-
-      (CommandType::GetDataBits, "") => {
-        queue!(
-          stdout,
-          Print("Data bits: "),
-          SetForegroundColor(Color::Green),
-          Print(format!("{}", port.data_bits().unwrap())),
-          ResetColor,
-        ).unwrap();
-      },
-
-      (CommandType::GetParity, "") => {
-        queue!(
-          stdout,
-          Print("Parity: "),
-          SetForegroundColor(Color::Green),
-          Print(format!("{:?}", port.parity().unwrap())),
-          ResetColor,
-        ).unwrap();
-      },
-
-      (CommandType::GetStopBits, "") => {
-        queue!(
-          stdout,
-          Print("Stop bits: "),
-          SetForegroundColor(Color::Green),
-          Print(format!("{:?}", port.stop_bits().unwrap())),
-          ResetColor,
-        ).unwrap();
-      },
-
-      (CommandType::GetTimeout, "") => {
-        queue!(
-          stdout,
-          Print("Timeout: "),
-          SetForegroundColor(Color::Green),
-          Print(format!("{} ms", port.timeout().as_millis())),
-          ResetColor,
-        ).unwrap();
-      },
-
-      (CommandType::GetFlow, "") => {
-        queue!(
-          stdout,
-          Print("Flow control: "),
-          SetForegroundColor(Color::Green),
-          Print(format!("{:?}", port.flow_control().unwrap())),
-          ResetColor,
-        ).unwrap();
-      },
-
-      (CommandType::GetInQue, "") =>
-        match port.bytes_to_read() {
-          Ok(count) => {
-            queue!(
-              stdout,
-              Print("In: "),
-              SetForegroundColor(Color::Green),
-              Print(format!("{:4} bytes", count)),
-              ResetColor,
-            ).unwrap();
-          },
-
-          Err(_) => {
-            queue!(
-              stdout,
-              SetForegroundColor(Color::Red),
-              Print("Failed to get In bytes."),
-              ResetColor,
-            ).unwrap();
-          },
-        },
-
-      (CommandType::GetOutQue, "") =>
-        match port.bytes_to_write() {
-          Ok(count) => {
-            queue!(
-              stdout,
-              Print("Out: "),
-              SetForegroundColor(Color::Green),
-              Print(format!("{:4} bytes", count)),
-              ResetColor,
-            ).unwrap();
-          },
-
-          Err(_) => {
-            queue!(
-              stdout,
-              SetForegroundColor(Color::Red),
-              Print("Failed to get Out bytes."),
-              ResetColor,
-            ).unwrap();
-          },
-        },
-
-      (CommandType::GetCts, "") =>
-        match port.read_clear_to_send() {
-          Ok(state) => {
-            queue!(
-              stdout,
-              Print("CTS: "),
-              Print(
-                if state { "On" }
-                else     { "Off" }
-              ),
-            ).unwrap();
-          },
-
-          Err(_) => {
-            queue!(
-              stdout,
-              SetForegroundColor(Color::Red),
-              Print("Failed to get CTS state."),
-              ResetColor,
-            ).unwrap();
-          },
-        },
-
-      (CommandType::GetDsr, "") =>
-        match port.read_data_set_ready() {
-          Ok(state) => {
-            queue!(
-              stdout,
-              Print("DSR: "),
-              Print(
-                if state { "On" }
-                else     { "Off" }
-              ),
-            ).unwrap();
-          },
-
-          Err(_) => {
-            queue!(
-              stdout,
-              SetForegroundColor(Color::Red),
-              Print("Failed to get DSR state."),
-              ResetColor,
-            ).unwrap();
-          },
-        },
-
-      (CommandType::GetRi, "") =>
-        match port.read_ring_indicator() {
-          Ok(state) => {
-            queue!(
-              stdout,
-              Print("RI: "),
-              Print(
-                if state { "On" }
-                else     { "Off" }
-              ),
-            ).unwrap();
-          },
-
-          Err(_) => {
-            queue!(
-              stdout,
-              SetForegroundColor(Color::Red),
-              Print("Failed to get RI state."),
-              ResetColor,
-            ).unwrap();
-          },
-        },
-
-      (CommandType::GetCd, "") =>
-        match port.read_carrier_detect() {
-          Ok(state) => {
-            queue!(
-              stdout,
-              Print("CD: "),
-              Print(
-                if state { "On" }
-                else     { "Off" }
-              ),
-            ).unwrap();
-          },
-
-          Err(_) => {
-            queue!(
-              stdout,
-              SetForegroundColor(Color::Red),
-              Print("Failed to get CD state."),
-              ResetColor,
-            ).unwrap();
-          },
-        },
-
-      (CommandType::None, _) => {
-        queue!(
-          stdout,
-          SetForegroundColor(Color::Red),
-          Print("Invalid command."),
-          ResetColor,
-        ).unwrap();
-      },
+      }),
 
       _ => {
         queue!(
           stdout,
           SetForegroundColor(Color::Red),
-          Print("Invalid argument."),
+          Print("Argument invalid or insufficient."),
           ResetColor,
         ).unwrap();
       },
@@ -1895,12 +2191,10 @@ fn string_to_vec_ascii(s: String) -> Vec<String> {
     }
 
     if tmp.starts_with("\\") && tmp.len() > 2 {
-      if let Ok(v) = u8::from_str_radix(&tmp[1..3], 16) {
-        if v <= ' ' as u8 || v == 127 {
-          ret.push(tmp[..3].to_string());
-          tmp = tmp[3..].to_string();
-          continue;
-        }
+      if let Ok(_) = u8::from_str_radix(&tmp[1..3], 16) {
+        ret.push(tmp[..3].to_string());
+        tmp = tmp[3..].to_string();
+        continue;
       }
     }
 
@@ -1953,7 +2247,8 @@ fn get_printable_ascii(s: String) -> String {
     r"\1f" => "[US]",
     r"\20" => "[SP]",
     r"\7f" => "[DEL]",
-    _      => &s,
+
+    _ => &s,
   }.to_string()
 }
 
@@ -1974,42 +2269,9 @@ fn parse_input(s: Vec<String>, mode: Mode) -> (
   let command = fragments[0].concat();
 
   // match command
-  match command.to_lowercase().as_str() {
-    "help"       => ret.0 = CommandType::Help       ,
-    "clear"      => ret.0 = CommandType::Clear      ,
-    "send"       => ret.0 = CommandType::Send       ,
-    "recv"       => ret.0 = CommandType::Receive    ,
-    "flush"      => ret.0 = CommandType::Flush      ,
-    "set-mode"   => ret.0 = CommandType::SetMode    ,
-    "set-end"    => ret.0 = CommandType::SetEnding  ,
-    "set-rev"    => ret.0 = CommandType::SetReverse ,
-    "set-port"   => ret.0 = CommandType::SetPort    ,
-    "set-baud"   => ret.0 = CommandType::SetBaud    ,
-    "set-data"   => ret.0 = CommandType::SetDataBits,
-    "set-par"    => ret.0 = CommandType::SetParity  ,
-    "set-stop"   => ret.0 = CommandType::SetStopBits,
-    "set-time"   => ret.0 = CommandType::SetTimeout ,
-    "set-flow"   => ret.0 = CommandType::SetFlow    ,
-    "set-rts"    => ret.0 = CommandType::SetRts     ,
-    "set-dtr"    => ret.0 = CommandType::SetDtr     ,
-    "get-mode"   => ret.0 = CommandType::GetMode    ,
-    "get-end"    => ret.0 = CommandType::GetEnding  ,
-    "get-rev"    => ret.0 = CommandType::GetReverse ,
-    "get-port"   => ret.0 = CommandType::GetPort    ,
-    "get-baud"   => ret.0 = CommandType::GetBaud    ,
-    "get-data"   => ret.0 = CommandType::GetDataBits,
-    "get-par"    => ret.0 = CommandType::GetParity  ,
-    "get-stop"   => ret.0 = CommandType::GetStopBits,
-    "get-time"   => ret.0 = CommandType::GetTimeout ,
-    "get-flow"   => ret.0 = CommandType::GetFlow    ,
-    "get-in"     => ret.0 = CommandType::GetInQue   ,
-    "get-out"    => ret.0 = CommandType::GetOutQue  ,
-    "get-cts"    => ret.0 = CommandType::GetCts     ,
-    "get-dsr"    => ret.0 = CommandType::GetDsr     ,
-    "get-ri"     => ret.0 = CommandType::GetRi      ,
-    "get-cd"     => ret.0 = CommandType::GetCd      ,
-    _            => ret.0 = CommandType::None       ,
-  }
+  ret.0 = CommandType::from_str(
+    command.to_lowercase().as_str()
+  ).unwrap();
 
   // set command
   ret.1.push(fragments[0].clone());
@@ -2022,14 +2284,55 @@ fn parse_input(s: Vec<String>, mode: Mode) -> (
       },
 
       CommandType::Send => {
-          ret.1.push(fragments[1..].concat());
+        ret.1.push(fragments[1..].concat());
       },
 
-    _ => {
+      CommandType::Checksum => {
+        ret.1.push(fragments[1].clone());
+      },
+
+      _ => {
         ret.1.push(fragments[1..].join(&" ".to_string()));
-    },
+      },
+    }
   }
+
+  if fragments.len() > 2 {
+    match ret.0 {
+      CommandType::Checksum if mode == Mode::ASCII => {
+        ret.1.push(fragments[2..].join(&r"\20".to_string()));
+      },
+
+      CommandType::Checksum => {
+        ret.1.push(fragments[2..].concat());
+      },
+
+      _ => {},
+    }
   }
 
   return ret;
+}
+
+
+fn get_lead_byte_ascii(buffer: &mut String) -> u8 {
+  if buffer.starts_with("\\\\") {
+    buffer.drain(..2);
+    return '\\' as u8;
+  }
+
+  if buffer.starts_with("\\") {
+    let digits = buffer[1..3].to_string();
+    buffer.drain(..3);
+    return u8::from_str_radix(&digits, 16).unwrap();
+  }
+
+  return buffer.remove(0) as u8;
+}
+
+
+fn get_lead_byte_hex(buffer: &mut String) -> u8 {
+  let digits = buffer[..2].to_string();
+  buffer.drain(..2);
+  return u8::from_str_radix(&digits, 16).unwrap();
 }

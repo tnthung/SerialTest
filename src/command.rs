@@ -44,6 +44,8 @@ pub enum CommandType {
   GetDsr,         // get DSR
   GetRi,          // get RI
   GetCd,          // get CD
+
+  Checksum,       // checksum
 }
 
 impl std::str::FromStr for CommandType {
@@ -84,6 +86,7 @@ impl std::str::FromStr for CommandType {
       "get-dsr"    => Ok(CommandType::GetDsr     ),
       "get-ri"     => Ok(CommandType::GetRi      ),
       "get-cd"     => Ok(CommandType::GetCd      ),
+      "sum"        => Ok(CommandType::Checksum   ),
       _            => Ok(CommandType::None       ),
     }
   }
@@ -125,6 +128,7 @@ impl std::fmt::Display for CommandType {
       CommandType::GetDsr      => write!(f, "get-dsr"   ),
       CommandType::GetRi       => write!(f, "get-ri"    ),
       CommandType::GetCd       => write!(f, "get-cd"    ),
+      CommandType::Checksum    => write!(f, "sum"       ),
       CommandType::None        => write!(f, "none"      ),
     }
   }
@@ -138,24 +142,24 @@ impl CommandType {
 "help [command]: Print the help information for the command. \
 If no command is specified, print the help information for all commands.
 
-  - [command]: The command to print help information for.",
+- [command]: The command to print help information for.",
 
       CommandType::Send =>
 "send <message>: Send the message to the serial port and immediately receive the response.
 
-  - <message>: The message to send.",
+- <message>: The message to send.",
 
       CommandType::SetMode =>
 "set-mode <mode>: Set the mode of the message.
 
-  - <mode>: The mode of the message.
+- <mode>: The mode of the message.
     ascii: ASCII mode.
     hex  : Hexadecimal mode.",
 
       CommandType::SetEnding =>
 "set-end: <ending>: Set the ending of the message.
 
-  - <ending>: The type of ending.
+- <ending>: The type of ending.
     none: No ending.
     cr  : \\r.
     lf  : \\n.
@@ -164,24 +168,24 @@ If no command is specified, print the help information for all commands.
       CommandType::SetReverse =>
 "set-rev <reverse>: Set if message is in reverse order.
 
-  - <state>: Whether the message is in reverse order.
+- <state>: Whether the message is in reverse order.
     on : Reverse order.
     off: Normal order.",
 
       CommandType::SetPort =>
 "set-port <port>: Switch to the specified serial port.
 
-  - <port>: The serial port to switch to.",
+- <port>: The serial port to switch to.",
 
       CommandType::SetBaud =>
 "set-baud <baud>: Set the baud rate of the serial port.
 
-  - <baud>: The baud rate of the serial port.",
+- <baud>: The baud rate of the serial port.",
 
       CommandType::SetDataBits =>
 "set-data <data>: Set the data bits of the serial port.
 
-  - <data>: The data bits of the serial port.
+- <data>: The data bits of the serial port.
     5: 5 bits.
     6: 6 bits.
     7: 7 bits.
@@ -190,7 +194,7 @@ If no command is specified, print the help information for all commands.
       CommandType::SetParity =>
 "set-par <parity>: Set the parity of the serial port.
 
-  - <parity>: The parity of the serial port.
+- <parity>: The parity of the serial port.
     none: No parity.
     odd : Odd parity.
     even: Even parity.",
@@ -198,19 +202,19 @@ If no command is specified, print the help information for all commands.
       CommandType::SetStopBits =>
 "set-stop <stop>: Set the stop bits of the serial port.
 
-  - <stop>: The stop bits of the serial port.
+- <stop>: The stop bits of the serial port.
     1: 1 bit.
     2: 2 bits.",
 
       CommandType::SetTimeout =>
 "set-time <timeout>: Set the timeout of the serial port.
 
-  - <timeout>: The timeout of the serial port.",
+- <timeout>: The timeout of the serial port.",
 
       CommandType::SetFlow =>
 "set-flow <flow>: Set the flow control of the serial port.
 
-  - <flow>: The flow control of the serial port.
+- <flow>: The flow control of the serial port.
     none    : No flow control.
     hardware: Hardware flow control.
     software: Software flow control.",
@@ -218,16 +222,36 @@ If no command is specified, print the help information for all commands.
       CommandType::SetRts =>
 "set-rts <state>: Set the RTS of the serial port.
 
-  - <state>: Whether the RTS is on.
+- <state>: Whether the RTS is on.
     on : RTS on.
     off: RTS off.",
 
       CommandType::SetDtr =>
 "set-dtr <state>: Set the DTR of the serial port.
 
-  - <state>: Whether the DTR is on.
+- <state>: Whether the DTR is on.
     on : DTR on.
     off: DTR off.",
+
+      CommandType::Checksum =>
+"sum <type> <message>: Calculate the check sum from the given message. \
+Press enter will save the message and checksum to clipboard.
+
+- <type>: The type of checksum.
+    crc16: CRC-16.
+    sum8 : Sum each byte and get lower 8 bits.
+
+    The postfix 'c' indicating the char mode.
+    The postfix 'i' indicating the inverse the result.
+    The postfix 'n' indicating the negate the result.
+    The postfix 'r' indicating the reverse the byte order.
+
+    'i' & 'n' can only choose one.
+
+    Prefixes can be combined in any order and separated by '-' after type.
+    For example, 'crc16-ic' means CRC-16, inverse the result, char mode.
+
+- <message>: The message to calculate.",
 
       CommandType::Clear       => "clear: Clear the screen.",
       CommandType::Flush       => "flush: Flush the serial port manually.",
