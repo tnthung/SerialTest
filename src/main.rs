@@ -7,6 +7,7 @@ mod command;
 
 use std::{
   io  ::Write,
+  env ::args,
   str ::FromStr,
   cell::RefCell,
 };
@@ -143,369 +144,419 @@ fn main() {
 
   // Get first serial port
   let mut port = {
-    execute!(
-      stdout,
-      Print("Set the serial port.\n\n"),
-    ).unwrap();
+    let args = args().collect::<Vec<String>>();
 
-    let port_name: String;
-    let baud_rate: u32;
-    let data_bits: DataBits;
-    let parity   : Parity  ;
-    let stop_bits: StopBits;
+    if args.len() == 4 {
+      let port = args[1].clone();
+      let baud = args[2].clone();
+      let rest = args[3].clone();
 
-    { // get port name
+      let re = Regex::new(r"^[5-8][NOE][1-2]$").unwrap();
+
+      if !re.is_match(&rest) {
+        panic!("Invalid serial port settings.");
+      }
+
+      let rate: u32;
+      if let Ok(r) = u32::from_str(&baud) { rate = r; }
+      else {
+        panic!("Invalid baud rate.");
+      }
+
       let ports = available_ports().unwrap();
+      if !ports.iter().any(|p| p.port_name == port) {
+        panic!("Invalid port name.");
+      }
 
-      let mut input = input::InputBuilder::new("Port Name: ")
-        .preprocessor(|s, _| {
-          let name = s.concat();
-
-          let mut candidate = ports.iter()
-            .map(|p| {
-              let len = name.len();
-              if p.port_name.len() < len ||
-                !p.port_name.starts_with(&name) {
-                return String::new(); }
-              p.port_name[len..].to_string()
-            })
-            .collect::<Vec<String>>();
-
-          candidate.retain(|s| s.len() > 0);
-
-          input::Processed {
-            buffer   : s,
-            candidate: candidate,
-          }
+      serialport::new(port, rate)
+        .data_bits(match rest.chars().nth(0).unwrap() {
+          '5' => DataBits::Five,
+          '6' => DataBits::Six,
+          '7' => DataBits::Seven,
+          '8' => DataBits::Eight,
+          _   => panic!("Invalid data bits."),
         })
-        .renderer(|s, c| {
-          let mut processed = String::new();
-
-          let name = s.concat();
-
-          if ports.iter().any(|p| p.port_name == name) {
-            processed.push_str(&SetForegroundColor(Color::Green).to_string());
-          }
-
-          else if !ports.iter().any(|p| p.port_name.starts_with(&name)) {
-            processed.push_str(&SetForegroundColor(Color::Red).to_string());
-          }
-
-          processed.push_str(&name);
-
-          (processed, c)
+        .parity(match rest.chars().nth(1).unwrap() {
+          'N' => Parity::None,
+          'O' => Parity::Odd,
+          'E' => Parity::Even,
+          _   => panic!("Invalid parity."),
         })
-        .build();
+        .stop_bits(match rest.chars().nth(2).unwrap() {
+          '1' => StopBits::One,
+          '2' => StopBits::Two,
+          _   => panic!("Invalid stop bits."),
+        })
+        .timeout(std::time::Duration::from_millis(100))
+        .open()
+        .unwrap()
+    }
 
-      loop {
-        match input.prompt() {
-          Ok(result) => {
-            if ports.iter().any(|p| p.port_name == result) {
-              port_name = result;
+    else {
+      execute!(
+        stdout,
+        Print("Set the serial port.\n\n"),
+      ).unwrap();
+
+      let port_name: String;
+      let baud_rate: u32;
+      let data_bits: DataBits;
+      let parity   : Parity  ;
+      let stop_bits: StopBits;
+
+      { // get port name
+        let ports = available_ports().unwrap();
+
+        let mut input = input::InputBuilder::new("Port Name: ")
+          .preprocessor(|s, _| {
+            let name = s.concat();
+
+            let mut candidate = ports.iter()
+              .map(|p| {
+                let len = name.len();
+                if p.port_name.len() < len ||
+                  !p.port_name.starts_with(&name) {
+                  return String::new(); }
+                p.port_name[len..].to_string()
+              })
+              .collect::<Vec<String>>();
+
+            candidate.retain(|s| s.len() > 0);
+
+            input::Processed {
+              buffer   : s,
+              candidate: candidate,
+            }
+          })
+          .renderer(|s, c| {
+            let mut processed = String::new();
+
+            let name = s.concat();
+
+            if ports.iter().any(|p| p.port_name == name) {
+              processed.push_str(&SetForegroundColor(Color::Green).to_string());
+            }
+
+            else if !ports.iter().any(|p| p.port_name.starts_with(&name)) {
+              processed.push_str(&SetForegroundColor(Color::Red).to_string());
+            }
+
+            processed.push_str(&name);
+
+            (processed, c)
+          })
+          .build();
+
+        loop {
+          match input.prompt() {
+            Ok(result) => {
+              if ports.iter().any(|p| p.port_name == result) {
+                port_name = result;
+                break;
+              }
+
+              queue!(
+                stdout,
+                SetForegroundColor(Color::Red),
+                Print("Invalid port name.\r"),
+                ResetColor,
+                MoveUp(1),
+              ).unwrap();
+            },
+
+            Err(_) => {
+              panic!("Keyboard interrupt.");
+            },
+          }
+        }
+      }
+
+      { // get baud rate
+        let mut input = input::InputBuilder::new("Baud Rate: ")
+          .preprocessor(|s, _| {
+            let rate = s.concat();
+
+            let mut candidate = vec![
+              "9600"  .to_string(),
+              "19200" .to_string(),
+              "38400" .to_string(),
+              "57600" .to_string(),
+              "115200".to_string(),
+            ].into_iter()
+              .filter(|s| s.starts_with(&rate))
+              .map   (|s| s[rate.len()..].to_string())
+              .collect::<Vec<String>>();
+
+            candidate.retain(|s| s.len() > 0);
+
+            input::Processed {
+              buffer   : s,
+              candidate,
+            }
+          })
+          .renderer(|s, c| {
+            let mut processed = String::new();
+
+            let rate = s.concat();
+
+            if let Err(_) = u32::from_str(&rate) {
+              processed.push_str(&SetForegroundColor(Color::Red).to_string());
+            }
+
+            processed.push_str(&rate);
+
+            (processed, c)
+          })
+          .build_with_final(|s| u32::from_str(&s));
+
+        loop {
+          match input.prompt() {
+            Ok(Ok(rate)) => {
+              baud_rate = rate;
               break;
+            },
+
+            Ok(Err(_)) => {
+              queue!(
+                stdout,
+                SetForegroundColor(Color::Red),
+                Print("Invalid baud rate.\r"),
+                MoveUp(1),
+                ResetColor,
+              ).unwrap();
+            },
+
+            Err(_) => {
+              panic!("Keyboard interrupt.");
+            },
+          }
+        }
+      }
+
+      { // get data bits
+        let mut input = input::InputBuilder::new("Data bits: ")
+          .preprocessor(|s, _| {
+            let bits = s.concat();
+
+            input::Processed {
+              buffer   : s,
+              candidate:
+                if bits.len() != 0 { Vec::new() }
+                else { vec![
+                  "8".to_string(),
+                  "7".to_string(),
+                  "6".to_string(),
+                  "5".to_string(),
+                ]},
             }
+          })
+          .renderer(|s, c| {
+            let mut processed = String::new();
 
-            queue!(
-              stdout,
-              SetForegroundColor(Color::Red),
-              Print("Invalid port name.\r"),
-              ResetColor,
-              MoveUp(1),
-            ).unwrap();
-          },
+            let bits = s.concat();
 
-          Err(_) => {
-            panic!("Keyboard interrupt.");
-          },
-        }
-      }
-    }
-
-    { // get baud rate
-      let mut input = input::InputBuilder::new("Baud Rate: ")
-        .preprocessor(|s, _| {
-          let rate = s.concat();
-
-          let mut candidate = vec![
-            "9600"  .to_string(),
-            "19200" .to_string(),
-            "38400" .to_string(),
-            "57600" .to_string(),
-            "115200".to_string(),
-          ].into_iter()
-            .filter(|s| s.starts_with(&rate))
-            .map   (|s| s[rate.len()..].to_string())
-            .collect::<Vec<String>>();
-
-          candidate.retain(|s| s.len() > 0);
-
-          input::Processed {
-            buffer   : s,
-            candidate,
-          }
-        })
-        .renderer(|s, c| {
-          let mut processed = String::new();
-
-          let rate = s.concat();
-
-          if let Err(_) = u32::from_str(&rate) {
-            processed.push_str(&SetForegroundColor(Color::Red).to_string());
-          }
-
-          processed.push_str(&rate);
-
-          (processed, c)
-        })
-        .build_with_final(|s| u32::from_str(&s));
-
-      loop {
-        match input.prompt() {
-          Ok(Ok(rate)) => {
-            baud_rate = rate;
-            break;
-          },
-
-          Ok(Err(_)) => {
-            queue!(
-              stdout,
-              SetForegroundColor(Color::Red),
-              Print("Invalid baud rate.\r"),
-              MoveUp(1),
-              ResetColor,
-            ).unwrap();
-          },
-
-          Err(_) => {
-            panic!("Keyboard interrupt.");
-          },
-        }
-      }
-    }
-
-    { // get data bits
-      let mut input = input::InputBuilder::new("Data bits: ")
-        .preprocessor(|s, _| {
-          let bits = s.concat();
-
-          input::Processed {
-            buffer   : s,
-            candidate:
-              if bits.len() != 0 { Vec::new() }
-              else { vec![
-                "8".to_string(),
-                "7".to_string(),
-                "6".to_string(),
-                "5".to_string(),
-              ]},
-          }
-        })
-        .renderer(|s, c| {
-          let mut processed = String::new();
-
-          let bits = s.concat();
-
-          match bits.as_str() {
-            | "5"
-            | "6"
-            | "7"
-            | "8" => {
-              processed.push_str(&SetForegroundColor(Color::Green).to_string());
-            },
-
-            _ => {
-              processed.push_str(&SetForegroundColor(Color::Red).to_string());
-            },
-          }
-
-          processed.push_str(&bits);
-
-          (processed, c)
-        })
-        .build();
-
-      loop {
-        match input.prompt() {
-          Ok(bit) => {
-            match bit.as_str() {
-              "5" => data_bits = DataBits::Five,
-              "6" => data_bits = DataBits::Six,
-              "7" => data_bits = DataBits::Seven,
-              "8" => data_bits = DataBits::Eight,
+            match bits.as_str() {
+              | "5"
+              | "6"
+              | "7"
+              | "8" => {
+                processed.push_str(&SetForegroundColor(Color::Green).to_string());
+              },
 
               _ => {
-                queue!(
-                  stdout,
-                  SetForegroundColor(Color::Red),
-                  Print("Invalid data bits.\r"),
-                  MoveUp(1),
-                  ResetColor,
-                ).unwrap();
-
-                continue;
+                processed.push_str(&SetForegroundColor(Color::Red).to_string());
               },
             }
 
-            break;
-          },
+            processed.push_str(&bits);
 
-          Err(_) => {
-            panic!("Keyboard interrupt.");
-          },
+            (processed, c)
+          })
+          .build();
+
+        loop {
+          match input.prompt() {
+            Ok(bit) => {
+              match bit.as_str() {
+                "5" => data_bits = DataBits::Five,
+                "6" => data_bits = DataBits::Six,
+                "7" => data_bits = DataBits::Seven,
+                "8" => data_bits = DataBits::Eight,
+
+                _ => {
+                  queue!(
+                    stdout,
+                    SetForegroundColor(Color::Red),
+                    Print("Invalid data bits.\r"),
+                    MoveUp(1),
+                    ResetColor,
+                  ).unwrap();
+
+                  continue;
+                },
+              }
+
+              break;
+            },
+
+            Err(_) => {
+              panic!("Keyboard interrupt.");
+            },
+          }
         }
       }
-    }
 
-    { // get parity
-      let mut input = input::InputBuilder::new("Parity   : ")
-        .preprocessor(|s, _| {
-          let par = s.concat();
+      { // get parity
+        let mut input = input::InputBuilder::new("Parity   : ")
+          .preprocessor(|s, _| {
+            let par = s.concat();
 
-          let mut candidate = vec![ "none", "odd", "even",]
-            .into_iter()
-            .filter(|s| s.starts_with(&par))
-            .map(|s| s[par.len()..].to_string())
-            .collect::<Vec<String>>();
+            let mut candidate = vec![ "none", "odd", "even",]
+              .into_iter()
+              .filter(|s| s.starts_with(&par))
+              .map(|s| s[par.len()..].to_string())
+              .collect::<Vec<String>>();
 
-          candidate.retain(|s| s.len() > 0);
+            candidate.retain(|s| s.len() > 0);
 
-          input::Processed {
-            buffer   : s,
-            candidate,
-          }
-        })
-        .renderer(|s, c| {
-          let mut processed = String::new();
+            input::Processed {
+              buffer   : s,
+              candidate,
+            }
+          })
+          .renderer(|s, c| {
+            let mut processed = String::new();
 
-          let parity = s.concat();
+            let parity = s.concat();
 
-          match parity.as_str() {
-            | "none"
-            | "odd"
-            | "even" => {
-              processed.push_str(&SetForegroundColor(Color::Green).to_string());
-            },
-
-            _ => {
-              processed.push_str(&SetForegroundColor(Color::Red).to_string());
-            },
-          }
-
-          processed.push_str(&parity);
-
-          (processed, c)
-        })
-        .build();
-
-      loop {
-        match input.prompt() {
-          Ok(par) => {
-            match par.as_str() {
-              "none" => parity = Parity::None,
-              "odd"  => parity = Parity::Odd,
-              "even" => parity = Parity::Even,
+            match parity.as_str() {
+              | "none"
+              | "odd"
+              | "even" => {
+                processed.push_str(&SetForegroundColor(Color::Green).to_string());
+              },
 
               _ => {
-                queue!(
-                  stdout,
-                  SetForegroundColor(Color::Red),
-                  Print("Invalid parity.\r"),
-                  MoveUp(1),
-                  ResetColor,
-                ).unwrap();
-
-                continue;
+                processed.push_str(&SetForegroundColor(Color::Red).to_string());
               },
             }
 
-            break;
-          },
+            processed.push_str(&parity);
 
-          Err(_) => {
-            panic!("Keyboard interrupt.");
-          },
+            (processed, c)
+          })
+          .build();
+
+        loop {
+          match input.prompt() {
+            Ok(par) => {
+              match par.as_str() {
+                "none" => parity = Parity::None,
+                "odd"  => parity = Parity::Odd,
+                "even" => parity = Parity::Even,
+
+                _ => {
+                  queue!(
+                    stdout,
+                    SetForegroundColor(Color::Red),
+                    Print("Invalid parity.\r"),
+                    MoveUp(1),
+                    ResetColor,
+                  ).unwrap();
+
+                  continue;
+                },
+              }
+
+              break;
+            },
+
+            Err(_) => {
+              panic!("Keyboard interrupt.");
+            },
+          }
         }
       }
-    }
 
-    { // get stop bits
-      let mut input = input::InputBuilder::new("Stop bits: ")
-        .preprocessor(|s, _| {
-          let bits = s.concat();
+      { // get stop bits
+        let mut input = input::InputBuilder::new("Stop bits: ")
+          .preprocessor(|s, _| {
+            let bits = s.concat();
 
-          input::Processed {
-            buffer   : s,
-            candidate:
-              if bits.len() != 0 { Vec::new() }
-              else { vec![
-                "1".to_string(),
-                "2".to_string(),
-              ]},
-          }
-        })
-        .renderer(|s, c| {
-          let mut processed = String::new();
+            input::Processed {
+              buffer   : s,
+              candidate:
+                if bits.len() != 0 { Vec::new() }
+                else { vec![
+                  "1".to_string(),
+                  "2".to_string(),
+                ]},
+            }
+          })
+          .renderer(|s, c| {
+            let mut processed = String::new();
 
-          let bits = s.concat();
+            let bits = s.concat();
 
-          match bits.as_str() {
-            | "1"
-            | "2" => {
-              processed.push_str(&SetForegroundColor(Color::Green).to_string());
-            },
-
-            _ => {
-              processed.push_str(&SetForegroundColor(Color::Red).to_string());
-            },
-          }
-
-          processed.push_str(&bits);
-
-          (processed, c)
-        })
-        .build();
-
-      loop {
-        match input.prompt() {
-          Ok(bit) => {
-            match bit.as_str() {
-              "1" => stop_bits = StopBits::One,
-              "2" => stop_bits = StopBits::Two,
+            match bits.as_str() {
+              | "1"
+              | "2" => {
+                processed.push_str(&SetForegroundColor(Color::Green).to_string());
+              },
 
               _ => {
-                queue!(
-                  stdout,
-                  SetForegroundColor(Color::Red),
-                  Print("Invalid data bits.\r"),
-                  MoveUp(1),
-                  ResetColor,
-                ).unwrap();
-
-                continue;
+                processed.push_str(&SetForegroundColor(Color::Red).to_string());
               },
             }
 
-            break;
-          },
+            processed.push_str(&bits);
 
-          Err(_) => {
-            panic!("Keyboard interrupt.");
-          },
+            (processed, c)
+          })
+          .build();
+
+        loop {
+          match input.prompt() {
+            Ok(bit) => {
+              match bit.as_str() {
+                "1" => stop_bits = StopBits::One,
+                "2" => stop_bits = StopBits::Two,
+
+                _ => {
+                  queue!(
+                    stdout,
+                    SetForegroundColor(Color::Red),
+                    Print("Invalid data bits.\r"),
+                    MoveUp(1),
+                    ResetColor,
+                  ).unwrap();
+
+                  continue;
+                },
+              }
+
+              break;
+            },
+
+            Err(_) => {
+              panic!("Keyboard interrupt.");
+            },
+          }
         }
       }
-    }
 
-    match serialport::new(&port_name, baud_rate)
-      .data_bits(data_bits)
-      .parity   (parity   )
-      .stop_bits(stop_bits)
-      .timeout  (std::time::Duration::from_millis(100))
-      .open()
-    {
-      Ok(port) => port,
-      Err(_) => {
-        panic!("Failed to open serial port.");
-      },
+      match serialport::new(&port_name, baud_rate)
+        .data_bits(data_bits)
+        .parity   (parity   )
+        .stop_bits(stop_bits)
+        .timeout  (std::time::Duration::from_millis(100))
+        .open()
+      {
+        Ok(port) => port,
+        Err(_) => {
+          panic!("Failed to open serial port.");
+        },
+      }
     }
   };
 
