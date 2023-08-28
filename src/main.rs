@@ -1233,8 +1233,12 @@ fn main() {
               let mut tmp = arg.to_string();
 
               while tmp.len() > 0 {
-                sent_str.push_str(format!("{:02X} ",
-                  get_lead_byte_hex(&mut tmp)).as_str());
+              let tmp = get_lead_byte_hex(&mut tmp);
+
+              sent_str.push_str(
+                format!("{:02X} ",
+                  tmp).as_str());
+              buffer.push(tmp);
               }
             },
           }
