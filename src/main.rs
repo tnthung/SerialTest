@@ -127,7 +127,7 @@ fn main() {
   let mut stdout = std::io::stdout();
 
   let re_int   = Regex::new(r"^[1-9][0-9]*$"                           ).unwrap();
-  let re_hex   = Regex::new(r"^([0-9A-Fa-f]{2})+$"                     ).unwrap();
+  let re_hex   = Regex::new(r"^([0-9A-Fa-f]{2}\ ?)+$"                  ).unwrap();
   let re_sum   = Regex::new(r"^(crc16|sum8)(-[cirn]+)?$"               ).unwrap();
   let re_ascii = Regex::new(r"^(\\\\|\\[0-9A-Fa-f]{2}|[\ -~&&[^\\]])+$").unwrap();
 
@@ -1190,122 +1190,124 @@ fn main() {
           break;
         }
 
-          let mut buffer   = Vec::<u8>::new();
-          let mut sent_str = String::new();
+        let mut buffer   = Vec::<u8>::new();
+        let mut sent_str = String::new();
 
-          // convert message to bytes
-          match *mode.borrow() {
-            Mode::ASCII => {
-              let fragments = string_to_vec_ascii(arg.to_string());
+        // convert message to bytes
+        match *mode.borrow() {
+          Mode::ASCII => {
+            let fragments = string_to_vec_ascii(arg.to_string());
 
-              let mut was_slash = false;
+            let mut was_slash = false;
 
-              for i in &fragments {
-                if i == "\\" {
-                  if !was_slash {
-                    was_slash = true;
-                    buffer.push('\\' as u8);
-                    continue;
-                  }
-
-                  was_slash = false;
+            for i in &fragments {
+              if i == "\\" {
+                if !was_slash {
+                  was_slash = true;
+                  buffer.push('\\' as u8);
                   continue;
                 }
 
-                if i.starts_with("\\") {
-                  if let Ok(v) = u8::from_str_radix(&i[1..], 16) {
-                    buffer.push(v);
-                  }
-
-                  continue;
-                }
-
-                buffer.push(i.as_bytes()[0]);
+                was_slash = false;
+                continue;
               }
 
-              sent_str = fragments
-                .iter()
-                .map(|s| get_printable_ascii(s.to_string()))
-                .collect::<String>();
-            },
+              if i.starts_with("\\") {
+                if let Ok(v) = u8::from_str_radix(&i[1..], 16) {
+                  buffer.push(v);
+                }
 
-            Mode::HEX => {
-              let mut tmp = arg.to_string();
+                continue;
+              }
 
-              while tmp.len() > 0 {
+              buffer.push(i.as_bytes()[0]);
+            }
+
+            sent_str = fragments
+              .iter()
+              .map(|s| get_printable_ascii(s.to_string()))
+              .collect::<String>();
+          },
+
+          Mode::HEX => {
+            let mut tmp = arg.to_string().chars()
+              .filter(|c| c.is_ascii_hexdigit())
+              .collect::<String>();
+
+            while tmp.len() > 0 {
               let tmp = get_lead_byte_hex(&mut tmp);
 
               sent_str.push_str(
                 format!("{:02X} ",
                   tmp).as_str());
               buffer.push(tmp);
-              }
-            },
-          }
+            }
+          },
+        }
 
-          // add ending
-          match *ending.borrow() {
-            Ending::None => {},
-            Ending::CR   => {
-              buffer.push('\r' as u8);
-              sent_str.push_str(
-                if *mode.borrow() == Mode::ASCII { "[CR]" }
-                else                             { "0D"   });
-            },
-            Ending::LF   => {
-              buffer.push('\n' as u8);
-              sent_str.push_str(
-                if *mode.borrow() == Mode::ASCII { "[LF]" }
-                else                             { "0A"   });
-            },
-            Ending::CRLF => {
-              buffer.push('\r' as u8);
-              buffer.push('\n' as u8);
+        // add ending
+        match *ending.borrow() {
+          Ending::None => {},
+          Ending::CR   => {
+            buffer.push('\r' as u8);
+            sent_str.push_str(
+              if *mode.borrow() == Mode::ASCII { "[CR]" }
+              else                             { "0D"   });
+          },
+          Ending::LF   => {
+            buffer.push('\n' as u8);
+            sent_str.push_str(
+              if *mode.borrow() == Mode::ASCII { "[LF]" }
+              else                             { "0A"   });
+          },
+          Ending::CRLF => {
+            buffer.push('\r' as u8);
+            buffer.push('\n' as u8);
 
-              sent_str.push_str(
-                if *mode.borrow() == Mode::ASCII { "[CR][LF]" }
-                else                             { "0D 0A"    });
-            },
-          }
+            sent_str.push_str(
+              if *mode.borrow() == Mode::ASCII { "[CR][LF]" }
+              else                             { "0D 0A"    });
+          },
+        }
 
-          // send message
-          match port.write({
-            if *reverse.borrow() {
-              buffer.reverse(); }
-            &buffer
-          }) {
-            Ok(_) => {
-              queue!(
-                stdout,
-                Print(
-                  if *reverse.borrow() { "[Reverse]\n" }
-                  else                 { ""            }
-                ),
-                Print("Sent "),
-                SetForegroundColor(Color::Green),
-                Print(format!("{:4}", buffer.len())),
-                ResetColor,
-                Print(" bytes: "),
-                Print(sent_str),
-              ).unwrap();
-            },
+        // send message
+        match port.write({
+          if *reverse.borrow() {
+            buffer.reverse(); }
+          &buffer
+        }) {
+          Ok(_) => {
+            queue!(
+              stdout,
+              Print(
+                if *reverse.borrow() { "[Reverse]\n" }
+                else                 { ""            }
+              ),
+              Print("Sent "),
+              SetForegroundColor(Color::Green),
+              Print(format!("{:4}", buffer.len())),
+              ResetColor,
+              Print(" bytes: "),
+              Print(sent_str),
+            ).unwrap();
+          },
 
-            Err(_) => {
-              queue!(
-                stdout,
-                SetForegroundColor(Color::Red),
-                Print("Failed to send."),
-                ResetColor,
-              ).unwrap();
-            },
-          }
+          Err(_) => {
+            queue!(
+              stdout,
+              SetForegroundColor(Color::Red),
+              Print("Failed to send."),
+              ResetColor,
+            ).unwrap();
+          },
+        }
 
-          execute!(
-            stdout,
-            Print("\n"),
-          ).unwrap();
+        execute!(
+          stdout,
+          Print("\n"),
+        ).unwrap();
 
-          read_serial(port.try_clone().unwrap());
+        read_serial(port.try_clone().unwrap());
       }),
 
       CommandType::Receive if argument.len() == 0 =>
@@ -2286,10 +2288,6 @@ fn parse_input(s: Vec<String>, mode: Mode) -> (
         ret.1.push(fragments[1..].join(&r"\20".to_string()));
       },
 
-      CommandType::Send => {
-        ret.1.push(fragments[1..].concat());
-      },
-
       CommandType::Checksum => {
         ret.1.push(fragments[1].clone());
       },
@@ -2306,11 +2304,9 @@ fn parse_input(s: Vec<String>, mode: Mode) -> (
         ret.1.push(fragments[2..].join(&r"\20".to_string()));
       },
 
-      CommandType::Checksum => {
-        ret.1.push(fragments[2..].concat());
+      _ => {
+        ret.1.push(fragments[2..].join(&" ".to_string()));
       },
-
-      _ => {},
     }
   }
 
