@@ -634,7 +634,7 @@ fn main() {
     match *mode.borrow() {
       Mode::HEX if _sum_post.find(|c| c == 'c').is_some() => {
         checksum.chars().map(|c|
-          format!("{:02X} ", c as u8)
+          format!("{:02X}", c as u8)
         ).collect()
       },
 
