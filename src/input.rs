@@ -5,6 +5,11 @@ use crate::event::{
   start_listener,
 };
 
+use clipboard::{
+  ClipboardContext,
+  ClipboardProvider,
+};
+
 use crossterm::{
   queue,
   execute,
@@ -191,13 +196,9 @@ impl<'a, T> Input<'a, T> {
           modifiers: KeyModifiers::CONTROL,
           ..
         }) => {
-          if let Ok(s) = std::str::from_utf8(
-            &std::process::Command::new("powershell")
-              .args(&["-Command", "Get-Clipboard"])
-              .output()
-              .unwrap()
-              .stdout
-          ) {
+          let mut clipboard = ClipboardContext::new().unwrap();
+
+          if let Ok(s) = clipboard.get_contents() {
             let before = buffer[..cursor].to_vec();
             let after  = buffer[cursor..].to_vec();
 
