@@ -127,7 +127,7 @@ fn main() {
   let mut stdout = std::io::stdout();
 
   let re_int   = Regex::new(r"^[1-9][0-9]*$"                           ).unwrap();
-  let re_hex   = Regex::new(r"^([0-9A-Fa-f]{2}\ ?)+$"                  ).unwrap();
+  let re_hex   = Regex::new(r"^([0-9A-Fa-f]{2})+$"                     ).unwrap();
   let re_sum   = Regex::new(r"^(crc16|sum8)(-[cirn]+)?$"               ).unwrap();
   let re_ascii = Regex::new(r"^(\\\\|\\[0-9A-Fa-f]{2}|[\ -~&&[^\\]])+$").unwrap();
 
@@ -756,8 +756,11 @@ fn main() {
 
           if fragments.len() > 1 {
             processed.push(" ".to_string());
-            processed.extend(string_to_vec_ascii(
-              fragments[1].concat()));
+
+            match *mode.borrow() {
+              Mode::HEX   => processed.extend(fragments[1].clone()),
+              Mode::ASCII => processed.extend(string_to_vec_ascii(fragments[1].concat())),
+            }
           }
         },
 
@@ -771,8 +774,11 @@ fn main() {
 
           if fragments.len() > 2 {
             processed.push(" ".to_string());
-            processed.extend(string_to_vec_ascii(
-              fragments[2].concat()));
+
+            match *mode.borrow() {
+              Mode::HEX   => processed.extend(fragments[2].clone()),
+              Mode::ASCII => processed.extend(string_to_vec_ascii(fragments[2].concat())),
+            }
           }
         },
 
@@ -1033,7 +1039,22 @@ fn main() {
                 else                     { Color::Red   }
               ).to_string());
 
-              incr_column(&mut processed, raw_arg);
+              let mut to_push = Vec::<String>::new();
+              let mut raw_arg = raw_arg;
+
+              while raw_arg.len() > 1 {
+                let f = raw_arg.remove(0);
+                let s = raw_arg.remove(0);
+
+                to_push.push(f);
+                to_push.push(format!("{} ", s));
+              }
+
+              if raw_arg.len() > 0 {
+                to_push.push(raw_arg.remove(0));
+              }
+
+              incr_column(&mut processed, to_push);
             },
           }
         },
@@ -1080,7 +1101,22 @@ fn main() {
                   else                     { Color::Red   }
                 ).to_string());
 
-                incr_column(&mut processed, raw_arg);
+                let mut to_push = Vec::<String>::new();
+                let mut raw_arg = raw_arg;
+
+                while raw_arg.len() > 1 {
+                  let f = raw_arg.remove(0);
+                  let s = raw_arg.remove(0);
+
+                  to_push.push(f);
+                  to_push.push(format!("{} ", s));
+                }
+
+                if raw_arg.len() > 0 {
+                  to_push.push(raw_arg.remove(0));
+                }
+
+                incr_column(&mut processed, to_push);
               },
             }
           }
@@ -2288,6 +2324,10 @@ fn parse_input(s: Vec<String>, mode: Mode) -> (
         ret.1.push(fragments[1..].join(&r"\20".to_string()));
       },
 
+      CommandType::Send => {
+        ret.1.push(fragments[1..].concat());
+      },
+
       CommandType::Checksum => {
         ret.1.push(fragments[1].clone());
       },
@@ -2302,6 +2342,10 @@ fn parse_input(s: Vec<String>, mode: Mode) -> (
     match ret.0 {
       CommandType::Checksum if mode == Mode::ASCII => {
         ret.1.push(fragments[2..].join(&r"\20".to_string()));
+      },
+
+      CommandType::Checksum => {
+        ret.1.push(fragments[2..].concat());
       },
 
       _ => {
