@@ -29,3 +29,10 @@ pub fn start_listener<F>(mut cb: F, immediate: bool)
     }
   }
 }
+
+
+impl Default for Flow {
+  fn default() -> Self {
+    Flow::Continue
+  }
+}
